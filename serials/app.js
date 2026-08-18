@@ -2045,23 +2045,28 @@ function startApp() {
 
     async function loadInitialSwipeDeck() {
         showSwipeLoading(true, 'Загружаем стартовую колоду сериалов...');
-        swipeState.page = Math.floor(Math.random() * 3) + 1;
+        swipeState.page = 1;
 
         try {
             let shows = [];
             if (isAPIMode) {
-                const res = await TMDB.discover({
-                    page: swipeState.page,
-                    sort: 'popularity-desc',
-                    minRating: 7.2
-                });
-                shows = (res.results || []).map(r => TMDB.mapShow(r, genreMap));
-            } else {
-                shows = [...window.SERIES_DATA].sort(() => Math.random() - 0.5);
+                // Загружаем 2 страницы сразу (40 сериалов)
+                const [res1, res2] = await Promise.all([
+                    TMDB.discover({ page: 1, sort: 'popularity-desc', minRating: 6.5 }),
+                    TMDB.discover({ page: 2, sort: 'popularity-desc', minRating: 6.5 })
+                ]);
+                const raw1 = (res1 && res1.results) || [];
+                const raw2 = (res2 && res2.results) || [];
+                shows = [...raw1, ...raw2].map(r => TMDB.mapShow(r, genreMap));
+            }
+
+            // Дополняем локальной базой для 100% надежности
+            if (window.SERIES_DATA && Array.isArray(window.SERIES_DATA)) {
+                shows.push(...window.SERIES_DATA);
             }
 
             shows.forEach(show => {
-                if (show.poster && !swipeState.seenIds.has(show.id)) {
+                if (show && show.poster && !swipeState.seenIds.has(show.id)) {
                     swipeState.deck.push(show);
                 }
             });
@@ -2071,7 +2076,7 @@ function startApp() {
             renderSwipeDeck();
         } catch (err) {
             console.error('Ошибка загрузки стартовой колоды Swipe Check:', err);
-            if (!isAPIMode && window.SERIES_DATA) {
+            if (window.SERIES_DATA) {
                 swipeState.deck = [...window.SERIES_DATA].sort(() => Math.random() - 0.5);
                 renderSwipeDeck();
             }
@@ -2087,20 +2092,17 @@ function startApp() {
         try {
             let newShows = [];
 
-            // 1. Если есть недавно лайкнутые сериалы, запрашиваем рекомендации от TMDB
+            // 1. Если есть лайкнутые сериалы, запрашиваем рекомендации от TMDB
             if (isAPIMode && swipeState.likedSeriesQueue.length > 0) {
                 const targetId = swipeState.likedSeriesQueue[swipeState.likedSeriesQueue.length - 1];
                 try {
                     const recs = await TMDB.getRecommendations(targetId);
                     if (recs && recs.results && recs.results.length > 0) {
-                        newShows = recs.results.map(r => TMDB.mapShow(r, genreMap));
+                        newShows.push(...recs.results.map(r => TMDB.mapShow(r, genreMap)));
                     }
-                } catch(e) {
-                    console.warn('TMDB recommendations error:', e.message);
-                }
+                } catch(e) {}
 
-                // Если рекомендаций мало, пробуем getSimilar
-                if (newShows.length < 5) {
+                if (newShows.length < 8) {
                     try {
                         const sim = await TMDB.getSimilar(targetId);
                         if (sim && sim.results) {
@@ -2110,8 +2112,8 @@ function startApp() {
                 }
             }
 
-            // 2. Если рекомендаций всё ещё мало, запрашиваем через Discover по топовым жанрам вайба
-            if (isAPIMode && newShows.length < 6) {
+            // 2. Дополнительно запрашиваем через Discover по топовым жанрам
+            if (isAPIMode && newShows.length < 12) {
                 swipeState.page++;
                 const topGenres = getTopVibeGenres(2);
                 const genreIds = topGenres.map(g => genreReverseMap[g]).filter(Boolean);
@@ -2119,38 +2121,40 @@ function startApp() {
                 const discOptions = {
                     page: swipeState.page,
                     sort: 'popularity-desc',
-                    minRating: 6.5
+                    minRating: 6.0
                 };
                 if (genreIds.length > 0) {
                     discOptions.genreIds = genreIds;
                 }
 
-                const discRes = await TMDB.discover(discOptions);
-                if (discRes && discRes.results) {
-                    newShows.push(...discRes.results.map(r => TMDB.mapShow(r, genreMap)));
-                }
+                try {
+                    const discRes = await TMDB.discover(discOptions);
+                    if (discRes && discRes.results) {
+                        newShows.push(...discRes.results.map(r => TMDB.mapShow(r, genreMap)));
+                    }
+                } catch(e) {}
             }
 
-            // 3. Для локального режима (fallback)
-            if (!isAPIMode && window.SERIES_DATA) {
-                newShows = [...window.SERIES_DATA].filter(s => !swipeState.seenIds.has(s.id));
+            // 3. Fallback на локальную базу
+            if (window.SERIES_DATA) {
+                newShows.push(...window.SERIES_DATA);
             }
 
-            // Очищаем от дубликатов и уже просмотренных
-            const addedIds = new Set(swipeState.deck.map(s => s.id));
+            // Добавляем только непросмотренные и уникальные
+            const existingIds = new Set(swipeState.deck.map(s => s.id));
             newShows.forEach(show => {
-                if (show.poster && !swipeState.seenIds.has(show.id) && !addedIds.has(show.id)) {
-                    // Считаем оценку релевантности вайбу
+                if (show && show.poster && !swipeState.seenIds.has(show.id) && !existingIds.has(show.id)) {
                     show._vibeScore = calculateVibeScore(show);
                     swipeState.deck.push(show);
-                    addedIds.add(show.id);
+                    existingIds.add(show.id);
                 }
             });
 
             // Сортируем колоду по соответствию вайбу
             sortDeckByVibe();
 
-            if (swipeState.deck.length > 0 && !swipeState.topCardEl) {
+            // Если колода была пустой на экране — сразу отрисовываем
+            if (swipeState.deck.length > 0 && (!swipeState.topCardEl || el.swipeDeck.children.length === 0)) {
                 renderSwipeDeck();
             }
         } catch (err) {
@@ -2176,7 +2180,6 @@ function startApp() {
 
     function sortDeckByVibe() {
         if (Object.keys(swipeState.genreWeights).length === 0) return;
-        // Сохраняем первые 2 карточки, остальные сортируем
         if (swipeState.deck.length <= 2) return;
         const topTwo = swipeState.deck.slice(0, 2);
         const rest = swipeState.deck.slice(2);
@@ -2250,7 +2253,7 @@ function startApp() {
         bindSwipePhysics(frontCard);
 
         // Если в колоде осталось мало карточек, заранее пополняем
-        if (swipeState.deck.length < 5) {
+        if (swipeState.deck.length < 8) {
             refillSwipeDeck();
         }
     }
