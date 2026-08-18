@@ -2196,59 +2196,316 @@ If they are direct children of .app, we can use CSS Grid or just flex row after 
 
 @media (max-width: 768px) {
   .app {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "header"
-      "main";
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .header {
+    height: auto;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header__inner {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    gap: 8px 10px;
+    height: auto;
+  }
+
+  .header__logo {
+    padding: 2px 4px;
+    gap: 6px;
+  }
+
+  .header__logo-icon {
+    font-size: 20px;
+  }
+
+  .header__logo-text {
+    font-size: 1.05rem;
+  }
+
+  .header__logo-switch {
+    font-size: 0.6875rem;
+    padding: 2px 7px;
+  }
+
+  .header__actions {
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  .header__actions .btn {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+
+  .header__search-container {
+    width: 100%;
+    max-width: 100%;
+    order: 3;
+    gap: 8px;
+    margin-top: 2px;
+  }
+
+  .header__search-input {
+    height: 38px;
+    font-size: 0.8125rem;
+    padding: 6px 12px 6px 36px;
+  }
+
+  .pill-btn--ai {
+    height: 38px;
+    padding: 4px 12px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .sidebar {
     position: fixed;
     top: 0;
-    left: -280px;
+    left: -300px;
+    width: 85vw;
+    max-width: 300px;
     height: 100vh;
     z-index: 200;
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .sidebar--open {
-    transform: translateX(280px);
+    transform: translateX(300px);
   }
 
   .sidebar__toggle {
     display: flex;
-  }
-
-  .header__inner {
-    padding: 0 16px;
-    gap: 16px;
-  }
-
-  .header__search {
-    max-width: 100%;
+    bottom: 20px;
+    right: 16px;
+    padding: 10px 18px;
+    font-size: 0.875rem;
+    border-radius: 9999px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+    z-index: 150;
   }
   
   .main-content {
-    padding: 16px;
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px 10px 84px 10px;
+  }
+
+  .featured {
+    padding-bottom: 16px;
+    margin-bottom: 12px;
+  }
+
+  .featured__header {
+    margin-bottom: 12px;
+    gap: 10px;
+  }
+
+  .featured__tabs {
+    display: flex;
+    width: 100%;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .featured__tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .featured__tab {
+    min-width: 0;
+    flex: 1 1 auto;
+    padding: 8px 12px;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+  }
+
+  .featured__subtabs {
+    width: 100%;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  .featured__subtab {
+    flex: 1 1 auto;
+    text-align: center;
+    padding: 5px 10px;
+    font-size: 0.75rem;
+  }
+
+  .featured__arrows {
+    display: none;
+  }
+
+  .featured__card {
+    width: 130px;
+    min-width: 130px;
+  }
+
+  .featured__card-title {
+    font-size: 0.8rem;
+  }
+
+  .featured__card-meta {
+    font-size: 0.7rem;
+  }
+
+  .series-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .series-card {
+    border-radius: 12px;
+  }
+
+  .series-card__poster {
+    border-radius: 10px 10px 0 0;
+  }
+
+  .series-card__info {
+    padding: 8px 8px 10px 8px;
+  }
+
+  .series-card__title {
+    font-size: 0.84rem;
+    line-height: 1.25;
+    margin-bottom: 4px;
+  }
+
+  .series-card__meta {
+    font-size: 0.7rem;
+    margin-bottom: 4px;
+  }
+
+  .series-card__genres {
+    gap: 3px;
+  }
+
+  .series-card__genre-tag {
+    font-size: 0.65rem;
+    padding: 1px 5px;
+  }
+
+  .series-card__rating-badge {
+    font-size: 0.72rem;
+    padding: 2px 6px;
+    top: 6px;
+    right: 6px;
+  }
+
+  .series-card__status-badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    top: 6px;
+    left: 6px;
+  }
+
+  .results-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .results-bar__count {
+    font-size: 0.8125rem;
+  }
+
+  .results-bar__sort-select {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+  }
+
+  /* Modals on mobile */
+  .modal {
+    width: 95vw;
+    max-width: 95vw;
+    max-height: 92vh;
+    padding: 16px 14px;
+    border-radius: 16px;
+    margin: 10px auto;
+  }
+
+  .modal__body {
+    flex-direction: column;
+    padding: 12px 6px;
+    gap: 16px;
+  }
+
+  .modal__poster {
+    width: 140px;
+    margin: 0 auto;
+    border-radius: 10px;
+  }
+
+  .modal__title {
+    font-size: 1.15rem;
+    text-align: center;
+  }
+
+  .modal__title-original {
+    font-size: 0.8rem;
+    text-align: center;
+  }
+
+  .modal__ratings {
+    justify-content: center;
+  }
+
+  .modal__meta-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 12px;
+  }
+
+  .modal__links {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .modal__link {
+    width: 100%;
+    justify-content: center;
+    padding: 10px;
+    font-size: 0.85rem;
   }
 }
 
-@media (max-width: 576px) {
+@media (max-width: 480px) {
   .series-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
   }
-  
-  .modal__meta-grid {
-    grid-template-columns: 1fr;
-    gap: 4px;
+
+  .header__logo-text {
+    font-size: 0.95rem;
   }
-  
-  .modal__links {
+
+  .featured__tab {
+    padding: 7px 8px;
+    font-size: 0.75rem;
+  }
+
+  .ai-prompt-box__actions {
     flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
   }
-  
-  .modal__link {
-    width: 100%;
+
+  .ai-voice-btn {
     justify-content: center;
   }
 }
