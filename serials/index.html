@@ -299,6 +299,23 @@
           </div>
         </div>
 
+        <!-- Исключить жанры -->
+        <div class="filter-group" id="filter-exclude-genres-group">
+          <div class="filter-group__title">
+            Исключить жанры
+            <svg class="filter-group__title-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+          <div class="filter-group__content">
+            <div class="filter-search">
+              <svg class="filter-search__icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" class="filter-search__input" id="excludeGenresSearchInput" placeholder="Быстрый поиск жанра...">
+            </div>
+            <div class="checkbox-group scrollable-list" id="excludeGenresFilter">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+
         <!-- Страна производства -->
         <div class="filter-group" id="filter-include-countries-group">
           <div class="filter-group__title">

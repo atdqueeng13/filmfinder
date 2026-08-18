@@ -38,6 +38,8 @@ function startApp() {
         minRating: 0,
         includeCountries: [], // выбранные страны производства
         excludeCountries: [], // исключаемые страны
+        excludeGenres: [],    // исключаемые жанры (id для API, названия для локального)
+        excludeGenreNames: [], // всегда названия
         status: 'all',        // 'all' | 'ended' | 'running'
         sort: 'popularity-desc',
         theme: localStorage.getItem('serialfinder-theme') || 'dark',
@@ -179,6 +181,8 @@ function startApp() {
         applyFiltersBtn: document.getElementById('applyFiltersBtn'),
         genresFilter: document.getElementById('genresFilter'),
         genresSearchInput: document.getElementById('genresSearchInput'),
+        excludeGenresFilter: document.getElementById('excludeGenresFilter'),
+        excludeGenresSearchInput: document.getElementById('excludeGenresSearchInput'),
         countriesIncludeFilter: document.getElementById('countriesIncludeFilter'),
         includeCountriesSearchInput: document.getElementById('includeCountriesSearchInput'),
         countriesExcludeFilter: document.getElementById('countriesExcludeFilter'),
@@ -436,13 +440,26 @@ function startApp() {
 
     // ==================== НАСТРОЙКА ФИЛЬТРОВ ====================
     function setupGenreFilters(genres) {
-        el.genresFilter.innerHTML = genres.map(name => `
+        const genreCheckboxes = genres.map(name => `
             <label class="checkbox-item">
                 <input type="checkbox" class="checkbox-item__input" value="${name}" data-filter="genres">
                 <span class="checkbox-item__checkmark"></span>
                 <span class="checkbox-item__label">${name}</span>
             </label>
         `).join('');
+
+        el.genresFilter.innerHTML = genreCheckboxes;
+
+        // Также заполняем фильтр исключения жанров
+        if (el.excludeGenresFilter) {
+            el.excludeGenresFilter.innerHTML = genres.map(name => `
+                <label class="checkbox-item">
+                    <input type="checkbox" class="checkbox-item__input" value="${name}" data-filter="exclude-genres">
+                    <span class="checkbox-item__checkmark"></span>
+                    <span class="checkbox-item__label">${name}</span>
+                </label>
+            `).join('');
+        }
     }
 
     function setupCountryFilters(countries) {
@@ -622,8 +639,19 @@ function startApp() {
             }
         });
 
+        // Исключение жанров
+        if (el.excludeGenresFilter) {
+            el.excludeGenresFilter.addEventListener('change', (e) => {
+                if (e.target.classList.contains('checkbox-item__input')) {
+                    updateExcludeGenreState();
+                    triggerFilterChange();
+                }
+            });
+        }
+
         // Живой поиск в фильтрах
         setupSearchFilter(el.genresSearchInput, el.genresFilter);
+        setupSearchFilter(el.excludeGenresSearchInput, el.excludeGenresFilter);
         setupSearchFilter(el.includeCountriesSearchInput, el.countriesIncludeFilter);
         setupSearchFilter(el.excludeCountriesSearchInput, el.countriesExcludeFilter);
 
@@ -1196,6 +1224,24 @@ function startApp() {
         }
     }
 
+    function updateExcludeGenreState() {
+        const checked = getCheckedValues('#excludeGenresFilter .checkbox-item__input');
+        state.excludeGenreNames = checked;
+        if (isAPIMode) {
+            const ids = [];
+            checked.forEach(name => {
+                if (GENRE_NAME_TO_IDS[name]) {
+                    ids.push(...GENRE_NAME_TO_IDS[name]);
+                } else if (genreReverseMap[name]) {
+                    ids.push(genreReverseMap[name]);
+                }
+            });
+            state.excludeGenres = [...new Set(ids)];
+        } else {
+            state.excludeGenres = checked;
+        }
+    }
+
     function getCheckedValues(selector) {
         return [...document.querySelectorAll(selector)]
             .filter(cb => cb.checked)
@@ -1264,6 +1310,8 @@ function startApp() {
 
                     const allActive = hasSeries && hasAnime && hasCartoons && hasDoramas;
 
+                    const withoutGenres = [...state.excludeGenres];
+
                     if (!allActive) {
                         const onlyAnimation = (hasAnime || hasCartoons) && !hasSeries && !hasDoramas;
                         const noAnimation = (hasSeries || hasDoramas) && !hasAnime && !hasCartoons;
@@ -1274,7 +1322,7 @@ function startApp() {
                                 discoverOptions.withoutOriginCountry = 'JP,CN,KR';
                             }
                         } else if (noAnimation) {
-                            discoverOptions.withoutGenreIds = [animGenreId];
+                            withoutGenres.push(animGenreId);
                             if (hasDoramas && !hasSeries) {
                                 discoverOptions.withOriginalLanguage = 'ko';
                             } else if (hasSeries && !hasDoramas) {
@@ -1285,6 +1333,10 @@ function startApp() {
                                 discoverOptions.withoutOriginCountry = 'KR';
                             }
                         }
+                    }
+
+                    if (withoutGenres.length > 0) {
+                        discoverOptions.withoutGenreIds = [...new Set(withoutGenres)];
                     }
 
                     response = await TMDB.discover(discoverOptions);
@@ -1900,6 +1952,8 @@ function startApp() {
         state.minRating = 0;
         state.includeCountries = [];
         state.excludeCountries = [];
+        state.excludeGenres = [];
+        state.excludeGenreNames = [];
         state.status = 'all';
         state.sort = isAPIMode ? 'popularity-desc' : 'rating-desc';
         state.page = 1;
@@ -1922,11 +1976,15 @@ function startApp() {
         el.sortSelect.value = state.sort;
 
         if (el.genresSearchInput) el.genresSearchInput.value = '';
+        if (el.excludeGenresSearchInput) el.excludeGenresSearchInput.value = '';
         if (el.includeCountriesSearchInput) el.includeCountriesSearchInput.value = '';
         if (el.excludeCountriesSearchInput) el.excludeCountriesSearchInput.value = '';
 
         document.querySelectorAll('.checkbox-item').forEach(item => item.style.display = 'flex');
         document.querySelectorAll('#genresFilter .checkbox-item__input').forEach(cb => cb.checked = false);
+        if (el.excludeGenresFilter) {
+            document.querySelectorAll('#excludeGenresFilter .checkbox-item__input').forEach(cb => cb.checked = false);
+        }
         document.querySelectorAll('#countriesIncludeFilter .checkbox-item__input').forEach(cb => cb.checked = false);
         document.querySelectorAll('#countriesExcludeFilter .checkbox-item__input').forEach(cb => cb.checked = false);
 
@@ -2417,10 +2475,10 @@ function startApp() {
             // Настраиваем фильтры TMDB по категории
             if (category === 'anime') {
                 discoverOpts.genreIds = [16]; // Анимация
-                discoverOpts.withOriginalLanguage = 'ja';
+                discoverOpts.withOriginalLanguage = 'ja'; // Японский язык = аниме
             } else if (category === 'cartoon') {
                 discoverOpts.genreIds = [16]; // Анимация
-                discoverOpts.withoutOriginalLanguage = 'ja';
+                discoverOpts.withOriginalLanguage = 'en'; // Английский = западные мультсериалы
             } else if (category === 'comedy') {
                 discoverOpts.genreIds = [35]; // Комедия
                 discoverOpts.withoutGenreIds = [16]; // Без анимации
@@ -2440,6 +2498,7 @@ function startApp() {
             const existingIds = new Set(swipeState.deck.map(s => s.id));
             tmdbShows.forEach(show => {
                 if (show && show.poster && !swipeState.seenIds.has(show.id) && !existingIds.has(show.id)) {
+                    // Для аниме/мультов дополнительно проверяем через matchesVibeCategory
                     if (matchesVibeCategory(show, category)) {
                         show._vibeScore = calculateVibeScore(show);
                         swipeState.deck.push(show);
@@ -2460,13 +2519,17 @@ function startApp() {
 
         try {
             let newShows = [];
+            const category = swipeState.vibeCategory;
 
             if (isAPIMode && swipeState.likedSeriesQueue.length > 0) {
                 const targetId = swipeState.likedSeriesQueue[swipeState.likedSeriesQueue.length - 1];
                 try {
                     const recs = await TMDB.getRecommendations(targetId);
                     if (recs && recs.results && recs.results.length > 0) {
-                        newShows.push(...recs.results.map(r => TMDB.mapShow(r, genreMap)));
+                        const mapped = recs.results
+                            .map(r => TMDB.mapShow(r, genreMap))
+                            .filter(s => matchesVibeCategory(s, category) && s.poster);
+                        newShows.push(...mapped);
                     }
                 } catch(e) {}
 
@@ -2474,7 +2537,10 @@ function startApp() {
                     try {
                         const sim = await TMDB.getSimilar(targetId);
                         if (sim && sim.results) {
-                            newShows.push(...sim.results.map(r => TMDB.mapShow(r, genreMap)));
+                            const mapped = sim.results
+                                .map(r => TMDB.mapShow(r, genreMap))
+                                .filter(s => matchesVibeCategory(s, category) && s.poster);
+                            newShows.push(...mapped);
                         }
                     } catch(e) {}
                 }
@@ -2490,12 +2556,36 @@ function startApp() {
                     sort: 'popularity-desc',
                     minRating: 6.0
                 };
-                if (genreIds.length > 0) discOptions.genreIds = genreIds;
+
+                if (category === 'anime') {
+                    discOptions.genreIds = [16];
+                    discOptions.withOriginalLanguage = 'ja';
+                } else if (category === 'cartoon') {
+                    discOptions.genreIds = [16];
+                    discOptions.withOriginalLanguage = 'en';
+                } else if (category === 'comedy') {
+                    discOptions.genreIds = [35];
+                    discOptions.withoutGenreIds = [16];
+                } else if (category === 'serious') {
+                    discOptions.withoutGenreIds = [16, 35];
+                    discOptions.minRating = 7.0;
+                }
+
+                if (genreIds.length > 0) {
+                    if (discOptions.genreIds) {
+                        discOptions.genreIds = [...new Set([...discOptions.genreIds, ...genreIds])];
+                    } else {
+                        discOptions.genreIds = genreIds;
+                    }
+                }
 
                 try {
                     const discRes = await TMDB.discover(discOptions);
                     if (discRes && discRes.results) {
-                        newShows.push(...discRes.results.map(r => TMDB.mapShow(r, genreMap)));
+                        const mapped = discRes.results
+                            .map(r => TMDB.mapShow(r, genreMap))
+                            .filter(s => matchesVibeCategory(s, category) && s.poster);
+                        newShows.push(...mapped);
                     }
                 } catch(e) {}
             }
@@ -2505,10 +2595,11 @@ function startApp() {
             }
 
             const existingIds = new Set(swipeState.deck.map(s => s.id));
-            const category = swipeState.vibeCategory;
             newShows.forEach(show => {
-                if (show && show.poster && !swipeState.seenIds.has(show.id) && !existingIds.has(show.id)) {
+                const poster = show.poster || (show.poster_path ? TMDB.posterUrl(show.poster_path) : '');
+                if (show && poster && !swipeState.seenIds.has(show.id) && !existingIds.has(show.id)) {
                     if (!category || matchesVibeCategory(show, category)) {
+                        show.poster = poster;
                         show._vibeScore = calculateVibeScore(show);
                         swipeState.deck.push(show);
                         existingIds.add(show.id);
@@ -2636,15 +2727,16 @@ function startApp() {
         const year = show.year || '';
         const country = show.country || '';
         const genres = (show.genres || []).slice(0, 3);
+        const poster = show.poster || (show.poster_path ? TMDB.posterUrl(show.poster_path) : '');
 
         const categoryTag = getCategoryTag(show);
 
         card.innerHTML = `
-            ${show.poster ? `
-                <img src="${show.poster}" alt="${displayTitle}" class="swipe-card__poster" loading="eager"
+            ${poster ? `
+                <img src="${poster}" alt="${displayTitle}" class="swipe-card__poster" loading="eager"
                      onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
             ` : ''}
-            <div class="swipe-card__fallback" style="${show.poster ? 'display:none;' : 'display:flex;'}">
+            <div class="swipe-card__fallback" style="${poster ? 'display:none;' : 'display:flex;'}">
                 ${displayTitle.charAt(0).toUpperCase()}
             </div>
 
