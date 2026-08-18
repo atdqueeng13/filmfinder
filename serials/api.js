@@ -154,6 +154,15 @@ const TMDB = (() => {
         return getDetails(randomItem.id);
     }
 
+    // === Похожие сериалы и рекомендации (для Swipe Check) ===
+    async function getRecommendations(id, page = 1) {
+        return request(`/tv/${id}/recommendations`, { page });
+    }
+
+    async function getSimilar(id, page = 1) {
+        return request(`/tv/${id}/similar`, { page });
+    }
+
     // === Поиск по тексту ===
 
     async function search(query, page = 1) {
@@ -380,6 +389,7 @@ const TMDB = (() => {
         getGenres, clearGenreCache,
         discover, search, getDetails, getCachedDetails,
         trending, newReleases, recentlyCompleted, getRandomSeries,
+        getRecommendations, getSimilar,
         COUNTRY_CODES, CODE_TO_COUNTRY, countryName, countryCode,
         mapShow, mapDetails, calculateSmartRating,
     };

@@ -247,8 +247,24 @@ function startApp() {
         aiError: document.getElementById('aiError'),
         aiResults: document.getElementById('aiResults'),
         aiResultsGrid: document.getElementById('aiResultsGrid'),
-        aiResetSearchBtn: document.getElementById('aiResetSearchBtn'),
         toggleAiKeyBtn: document.getElementById('toggleAiKeyBtn'),
+        // Swipe Check Elements
+        swipeCheckBtn: document.getElementById('swipeCheckBtn'),
+        swipeModalOverlay: document.getElementById('swipeModalOverlay'),
+        swipeModalClose: document.getElementById('swipeModalClose'),
+        swipeDeck: document.getElementById('swipeDeck'),
+        swipeLoading: document.getElementById('swipeLoading'),
+        swipeLoadingText: document.getElementById('swipeLoadingText'),
+        swipeDislikeBtn: document.getElementById('swipeDislikeBtn'),
+        swipeLikeBtn: document.getElementById('swipeLikeBtn'),
+        swipeInfoBtn: document.getElementById('swipeInfoBtn'),
+        swipeVibeStatus: document.getElementById('swipeVibeStatus'),
+        swipeOpenLikesBtn: document.getElementById('swipeOpenLikesBtn'),
+        swipeCloseLikesBtn: document.getElementById('swipeCloseLikesBtn'),
+        swipeLikesDrawer: document.getElementById('swipeLikesDrawer'),
+        swipeLikesList: document.getElementById('swipeLikesList'),
+        swipeLikesCount: document.getElementById('swipeLikesCount'),
+        swipeLikesTotal: document.getElementById('swipeLikesTotal'),
     };
 
     // ==================== ИНИЦИАЛИЗАЦИЯ ====================
@@ -1911,7 +1927,582 @@ function startApp() {
         triggerFilterChange();
     }
 
+    // ===================================================
+    // === 🔥 SWIPE CHECK (VIBE MATCHER TINDER ENGINE) ===
+    // ===================================================
+
+    const swipeState = {
+        deck: [],
+        seenIds: new Set(),
+        likedList: [],
+        genreWeights: {},
+        likedSeriesQueue: [],
+        isFetching: false,
+        isAnimating: false,
+        page: 1,
+        isOpen: false,
+        topCardEl: null,
+        isDragging: false,
+        startX: 0,
+        startY: 0,
+        currentX: 0,
+        currentY: 0,
+        activeAnimFrame: null,
+    };
+
+    function initSwipeCheck() {
+        if (!el.swipeCheckBtn) return;
+
+        // Открытие / закрытие модала
+        el.swipeCheckBtn.addEventListener('click', openSwipeModal);
+        if (el.swipeModalClose) el.swipeModalClose.addEventListener('click', closeSwipeModal);
+        if (el.swipeModalOverlay) {
+            el.swipeModalOverlay.addEventListener('click', (e) => {
+                if (e.target === el.swipeModalOverlay) closeSwipeModal();
+            });
+        }
+
+        // Кнопки управления
+        if (el.swipeDislikeBtn) {
+            el.swipeDislikeBtn.addEventListener('click', () => {
+                if (!swipeState.isAnimating && swipeState.deck.length > 0) {
+                    performSwipe('left');
+                }
+            });
+        }
+
+        if (el.swipeLikeBtn) {
+            el.swipeLikeBtn.addEventListener('click', () => {
+                if (!swipeState.isAnimating && swipeState.deck.length > 0) {
+                    performSwipe('right');
+                }
+            });
+        }
+
+        if (el.swipeInfoBtn) {
+            el.swipeInfoBtn.addEventListener('click', () => {
+                const current = swipeState.deck[0];
+                if (current) {
+                    openModal(current.id);
+                }
+            });
+        }
+
+        // Лайки / Вайб-лист
+        if (el.swipeOpenLikesBtn) {
+            el.swipeOpenLikesBtn.addEventListener('click', () => {
+                renderSwipeLikesList();
+                if (el.swipeLikesDrawer) el.swipeLikesDrawer.style.display = 'flex';
+            });
+        }
+
+        if (el.swipeCloseLikesBtn) {
+            el.swipeCloseLikesBtn.addEventListener('click', () => {
+                if (el.swipeLikesDrawer) el.swipeLikesDrawer.style.display = 'none';
+            });
+        }
+
+        // Управление с клавиатуры
+        window.addEventListener('keydown', (e) => {
+            if (!swipeState.isOpen) return;
+            if (e.key === 'Escape') {
+                if (el.swipeLikesDrawer && el.swipeLikesDrawer.style.display === 'flex') {
+                    el.swipeLikesDrawer.style.display = 'none';
+                } else {
+                    closeSwipeModal();
+                }
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                if (!swipeState.isAnimating && swipeState.deck.length > 0) performSwipe('left');
+            } else if (e.key === 'ArrowRight' || e.code === 'Space') {
+                e.preventDefault();
+                if (!swipeState.isAnimating && swipeState.deck.length > 0) performSwipe('right');
+            }
+        });
+    }
+
+    async function openSwipeModal() {
+        swipeState.isOpen = true;
+        if (el.swipeModalOverlay) el.swipeModalOverlay.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+
+        updateSwipeVibeStatus();
+        updateSwipeLikesUI();
+
+        if (swipeState.deck.length === 0) {
+            await loadInitialSwipeDeck();
+        } else {
+            renderSwipeDeck();
+        }
+    }
+
+    function closeSwipeModal() {
+        swipeState.isOpen = false;
+        if (el.swipeModalOverlay) el.swipeModalOverlay.style.display = 'none';
+        if (el.swipeLikesDrawer) el.swipeLikesDrawer.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    async function loadInitialSwipeDeck() {
+        showSwipeLoading(true, 'Загружаем стартовую колоду сериалов...');
+        swipeState.page = Math.floor(Math.random() * 3) + 1;
+
+        try {
+            let shows = [];
+            if (isAPIMode) {
+                const res = await TMDB.discover({
+                    page: swipeState.page,
+                    sort: 'popularity-desc',
+                    minRating: 7.2
+                });
+                shows = (res.results || []).map(r => TMDB.mapShow(r, genreMap));
+            } else {
+                shows = [...window.SERIES_DATA].sort(() => Math.random() - 0.5);
+            }
+
+            shows.forEach(show => {
+                if (show.poster && !swipeState.seenIds.has(show.id)) {
+                    swipeState.deck.push(show);
+                }
+            });
+
+            // Перемешиваем для стартового разнообразия
+            swipeState.deck.sort(() => Math.random() - 0.5);
+            renderSwipeDeck();
+        } catch (err) {
+            console.error('Ошибка загрузки стартовой колоды Swipe Check:', err);
+            if (!isAPIMode && window.SERIES_DATA) {
+                swipeState.deck = [...window.SERIES_DATA].sort(() => Math.random() - 0.5);
+                renderSwipeDeck();
+            }
+        } finally {
+            showSwipeLoading(false);
+        }
+    }
+
+    async function refillSwipeDeck() {
+        if (swipeState.isFetching) return;
+        swipeState.isFetching = true;
+
+        try {
+            let newShows = [];
+
+            // 1. Если есть недавно лайкнутые сериалы, запрашиваем рекомендации от TMDB
+            if (isAPIMode && swipeState.likedSeriesQueue.length > 0) {
+                const targetId = swipeState.likedSeriesQueue[swipeState.likedSeriesQueue.length - 1];
+                try {
+                    const recs = await TMDB.getRecommendations(targetId);
+                    if (recs && recs.results && recs.results.length > 0) {
+                        newShows = recs.results.map(r => TMDB.mapShow(r, genreMap));
+                    }
+                } catch(e) {
+                    console.warn('TMDB recommendations error:', e.message);
+                }
+
+                // Если рекомендаций мало, пробуем getSimilar
+                if (newShows.length < 5) {
+                    try {
+                        const sim = await TMDB.getSimilar(targetId);
+                        if (sim && sim.results) {
+                            newShows.push(...sim.results.map(r => TMDB.mapShow(r, genreMap)));
+                        }
+                    } catch(e) {}
+                }
+            }
+
+            // 2. Если рекомендаций всё ещё мало, запрашиваем через Discover по топовым жанрам вайба
+            if (isAPIMode && newShows.length < 6) {
+                swipeState.page++;
+                const topGenres = getTopVibeGenres(2);
+                const genreIds = topGenres.map(g => genreReverseMap[g]).filter(Boolean);
+
+                const discOptions = {
+                    page: swipeState.page,
+                    sort: 'popularity-desc',
+                    minRating: 6.5
+                };
+                if (genreIds.length > 0) {
+                    discOptions.genreIds = genreIds;
+                }
+
+                const discRes = await TMDB.discover(discOptions);
+                if (discRes && discRes.results) {
+                    newShows.push(...discRes.results.map(r => TMDB.mapShow(r, genreMap)));
+                }
+            }
+
+            // 3. Для локального режима (fallback)
+            if (!isAPIMode && window.SERIES_DATA) {
+                newShows = [...window.SERIES_DATA].filter(s => !swipeState.seenIds.has(s.id));
+            }
+
+            // Очищаем от дубликатов и уже просмотренных
+            const addedIds = new Set(swipeState.deck.map(s => s.id));
+            newShows.forEach(show => {
+                if (show.poster && !swipeState.seenIds.has(show.id) && !addedIds.has(show.id)) {
+                    // Считаем оценку релевантности вайбу
+                    show._vibeScore = calculateVibeScore(show);
+                    swipeState.deck.push(show);
+                    addedIds.add(show.id);
+                }
+            });
+
+            // Сортируем колоду по соответствию вайбу
+            sortDeckByVibe();
+
+            if (swipeState.deck.length > 0 && !swipeState.topCardEl) {
+                renderSwipeDeck();
+            }
+        } catch (err) {
+            console.warn('Ошибка пополнения колоды Swipe Check:', err);
+        } finally {
+            swipeState.isFetching = false;
+        }
+    }
+
+    function calculateVibeScore(show) {
+        let score = 0;
+        const genres = show.genres || [];
+        genres.forEach(g => {
+            if (swipeState.genreWeights[g]) {
+                score += swipeState.genreWeights[g];
+            }
+        });
+        if (show.country && swipeState.genreWeights[show.country]) {
+            score += swipeState.genreWeights[show.country];
+        }
+        return score;
+    }
+
+    function sortDeckByVibe() {
+        if (Object.keys(swipeState.genreWeights).length === 0) return;
+        // Сохраняем первые 2 карточки, остальные сортируем
+        if (swipeState.deck.length <= 2) return;
+        const topTwo = swipeState.deck.slice(0, 2);
+        const rest = swipeState.deck.slice(2);
+
+        rest.sort((a, b) => (b._vibeScore || calculateVibeScore(b)) - (a._vibeScore || calculateVibeScore(a)));
+        swipeState.deck = [...topTwo, ...rest];
+    }
+
+    function getTopVibeGenres(limit = 2) {
+        return Object.entries(swipeState.genreWeights)
+            .filter(([key, weight]) => weight > 0)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, limit)
+            .map(([genre]) => genre);
+    }
+
+    function updateSwipeVibeStatus() {
+        if (!el.swipeVibeStatus) return;
+        const top = getTopVibeGenres(2);
+        if (top.length > 0) {
+            el.swipeVibeStatus.textContent = `Вайб: ${top.join(', ')}`;
+        } else {
+            el.swipeVibeStatus.textContent = 'Поиск по вайбу';
+        }
+    }
+
+    function updateSwipeLikesUI() {
+        const count = swipeState.likedList.length;
+        if (el.swipeLikesCount) el.swipeLikesCount.textContent = count;
+        if (el.swipeLikesTotal) el.swipeLikesTotal.textContent = count;
+    }
+
+    function showSwipeLoading(show, text = '') {
+        if (el.swipeLoading) {
+            el.swipeLoading.style.display = show ? 'flex' : 'none';
+        }
+        if (el.swipeLoadingText && text) {
+            el.swipeLoadingText.textContent = text;
+        }
+    }
+
+    // ==================== РЕНДЕРИНГ КОЛОДЫ ====================
+
+    function renderSwipeDeck() {
+        if (!el.swipeDeck) return;
+        el.swipeDeck.innerHTML = '';
+        swipeState.topCardEl = null;
+
+        if (swipeState.deck.length === 0) {
+            showSwipeLoading(true, 'Подбираем сериалы под ваш вайб...');
+            refillSwipeDeck();
+            return;
+        }
+
+        showSwipeLoading(false);
+
+        // Рендерим заднюю карточку (если есть)
+        if (swipeState.deck.length > 1) {
+            const backItem = swipeState.deck[1];
+            const backCard = createCardElement(backItem, false);
+            el.swipeDeck.appendChild(backCard);
+        }
+
+        // Рендерим верхнюю карточку
+        const frontItem = swipeState.deck[0];
+        const frontCard = createCardElement(frontItem, true);
+        el.swipeDeck.appendChild(frontCard);
+        swipeState.topCardEl = frontCard;
+
+        // Навешиваем физику жестов на верхнюю карточку
+        bindSwipePhysics(frontCard);
+
+        // Если в колоде осталось мало карточек, заранее пополняем
+        if (swipeState.deck.length < 5) {
+            refillSwipeDeck();
+        }
+    }
+
+    function createCardElement(show, isFront) {
+        const card = document.createElement('div');
+        card.className = `swipe-card ${isFront ? 'swipe-card--front' : 'swipe-card--back'}`;
+        card.dataset.id = show.id;
+
+        const displayTitle = show.titleRu || show.title || 'Без названия';
+        const displayOrig = show.title && show.title !== displayTitle ? show.title : '';
+        const rating = typeof show.avgRating === 'number' ? show.avgRating.toFixed(1) : (show.vote_average ? show.vote_average.toFixed(1) : '—');
+        const year = show.year || '';
+        const country = show.country || '';
+        const genres = (show.genres || []).slice(0, 3);
+
+        const categoryTag = getCategoryTag(show);
+
+        card.innerHTML = `
+            ${show.poster ? `
+                <img src="${show.poster}" alt="${displayTitle}" class="swipe-card__poster" loading="eager"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            ` : ''}
+            <div class="swipe-card__fallback" style="${show.poster ? 'display:none;' : 'display:flex;'}">
+                ${displayTitle.charAt(0).toUpperCase()}
+            </div>
+
+            <!-- Верхние бейджи -->
+            <div class="swipe-card__rating-badge">⭐️ ${rating}</div>
+            ${categoryTag ? `<div class="swipe-card__category-badge">${categoryTag}</div>` : ''}
+
+            <!-- Динамические неоновые штампы -->
+            <div class="swipe-stamp swipe-stamp--like">👍 ВАЙБ</div>
+            <div class="swipe-stamp swipe-stamp--nope">👎 МИМО</div>
+
+            <!-- Нижняя информация -->
+            <div class="swipe-card__info">
+                <h2 class="swipe-card__title">${displayTitle}</h2>
+                ${displayOrig ? `<div class="swipe-card__title-orig">${displayOrig}</div>` : ''}
+                <div class="swipe-card__meta-row">
+                    ${year ? `<span>${year}</span>` : ''}
+                    ${year && country ? `<span class="swipe-card__dot">•</span>` : ''}
+                    ${country ? `<span>${country}</span>` : ''}
+                </div>
+                ${genres.length > 0 ? `
+                    <div class="swipe-card__genres">
+                        ${genres.map(g => `<span class="swipe-card__genre-tag">${g}</span>`).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+
+        return card;
+    }
+
+    function getCategoryTag(show) {
+        if (isAnime(show)) return 'Аниме';
+        if (isCartoon(show)) return 'Мультсериал';
+        if (isDorama(show)) return 'Дорама';
+        return 'Сериал';
+    }
+
+    // ==================== ЖЕСТЫ И ФИЗИКА СВАЙПА ====================
+
+    function bindSwipePhysics(cardEl) {
+        let isDown = false;
+        let startX = 0;
+        let startY = 0;
+        let currentDeltaX = 0;
+        let currentDeltaY = 0;
+
+        const likeStamp = cardEl.querySelector('.swipe-stamp--like');
+        const nopeStamp = cardEl.querySelector('.swipe-stamp--nope');
+
+        function onStart(e) {
+            if (swipeState.isAnimating) return;
+            isDown = true;
+            swipeState.isDragging = true;
+
+            const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+            const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+
+            startX = clientX;
+            startY = clientY;
+            currentDeltaX = 0;
+            currentDeltaY = 0;
+
+            cardEl.style.transition = 'none';
+        }
+
+        function onMove(e) {
+            if (!isDown) return;
+
+            const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+            const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+
+            currentDeltaX = clientX - startX;
+            currentDeltaY = clientY - startY;
+
+            const rot = currentDeltaX * 0.07;
+            cardEl.style.transform = `translate3d(${currentDeltaX}px, ${currentDeltaY}px, 0) rotate(${rot}deg)`;
+
+            // Проявление штампов
+            if (currentDeltaX > 20) {
+                const opacity = Math.min(1, (currentDeltaX - 20) / 90);
+                if (likeStamp) likeStamp.style.opacity = opacity;
+                if (nopeStamp) nopeStamp.style.opacity = 0;
+            } else if (currentDeltaX < -20) {
+                const opacity = Math.min(1, (-currentDeltaX - 20) / 90);
+                if (nopeStamp) nopeStamp.style.opacity = opacity;
+                if (likeStamp) likeStamp.style.opacity = 0;
+            } else {
+                if (likeStamp) likeStamp.style.opacity = 0;
+                if (nopeStamp) nopeStamp.style.opacity = 0;
+            }
+        }
+
+        function onEnd() {
+            if (!isDown) return;
+            isDown = false;
+            swipeState.isDragging = false;
+
+            const threshold = 75;
+
+            if (currentDeltaX > threshold) {
+                performSwipe('right');
+            } else if (currentDeltaX < -threshold) {
+                performSwipe('left');
+            } else {
+                // Пружинный возврат в центр
+                cardEl.style.transition = 'transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                cardEl.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
+                if (likeStamp) {
+                    likeStamp.style.transition = 'opacity 0.2s ease';
+                    likeStamp.style.opacity = 0;
+                }
+                if (nopeStamp) {
+                    nopeStamp.style.transition = 'opacity 0.2s ease';
+                    nopeStamp.style.opacity = 0;
+                }
+            }
+        }
+
+        // Мышь
+        cardEl.addEventListener('mousedown', onStart);
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onEnd);
+
+        // Тач-события (смартфоны)
+        cardEl.addEventListener('touchstart', onStart, { passive: true });
+        window.addEventListener('touchmove', onMove, { passive: true });
+        window.addEventListener('touchend', onEnd);
+        window.addEventListener('touchcancel', onEnd);
+    }
+
+    function performSwipe(direction) {
+        if (swipeState.isAnimating || swipeState.deck.length === 0) return;
+        swipeState.isAnimating = true;
+
+        const currentShow = swipeState.deck[0];
+        const cardEl = swipeState.topCardEl;
+
+        if (cardEl) {
+            const likeStamp = cardEl.querySelector('.swipe-stamp--like');
+            const nopeStamp = cardEl.querySelector('.swipe-stamp--nope');
+
+            cardEl.style.transition = 'transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease';
+
+            if (direction === 'right') {
+                if (likeStamp) likeStamp.style.opacity = 1;
+                cardEl.style.transform = 'translate3d(600px, 40px, 0) rotate(35deg)';
+                cardEl.style.opacity = '0';
+            } else {
+                if (nopeStamp) nopeStamp.style.opacity = 1;
+                cardEl.style.transform = 'translate3d(-600px, 40px, 0) rotate(-35deg)';
+                cardEl.style.opacity = '0';
+            }
+        }
+
+        // Обновляем веса и алгоритм
+        if (direction === 'right') {
+            // 👍 ЛАЙК: повышаем веса всех жанров
+            (currentShow.genres || []).forEach(g => {
+                swipeState.genreWeights[g] = (swipeState.genreWeights[g] || 0) + 3.0;
+            });
+            if (currentShow.country) {
+                swipeState.genreWeights[currentShow.country] = (swipeState.genreWeights[currentShow.country] || 0) + 1.5;
+            }
+
+            swipeState.likedList.push(currentShow);
+            swipeState.likedSeriesQueue.push(currentShow.id);
+            updateSwipeLikesUI();
+            updateSwipeVibeStatus();
+        } else {
+            // 👎 ДИЗЛАЙК: снижаем веса жанров
+            (currentShow.genres || []).forEach(g => {
+                swipeState.genreWeights[g] = (swipeState.genreWeights[g] || 0) - 1.2;
+            });
+        }
+
+        swipeState.seenIds.add(currentShow.id);
+        swipeState.deck.shift();
+
+        setTimeout(() => {
+            swipeState.isAnimating = false;
+            renderSwipeDeck();
+        }, 320);
+    }
+
+    function renderSwipeLikesList() {
+        if (!el.swipeLikesList) return;
+        el.swipeLikesList.innerHTML = '';
+
+        if (swipeState.likedList.length === 0) {
+            el.swipeLikesList.innerHTML = `
+                <div style="text-align: center; color: var(--text-muted); padding: 40px 20px;">
+                    <div style="font-size: 2.5rem; margin-bottom: 10px;">🍿</div>
+                    <p>Вы пока не лайкнули ни одного сериала.</p>
+                    <p style="font-size: 0.8125rem; margin-top: 6px;">Свайпайте вправо (👍 ВАЙБ), чтобы сохранить сериал в подборку!</p>
+                </div>
+            `;
+            return;
+        }
+
+        swipeState.likedList.forEach(show => {
+            const displayTitle = show.titleRu || show.title || 'Без названия';
+            const year = show.year || '';
+            const genres = (show.genres || []).slice(0, 2).join(', ');
+            const rating = typeof show.avgRating === 'number' ? show.avgRating.toFixed(1) : (show.vote_average ? show.vote_average.toFixed(1) : '—');
+
+            const item = document.createElement('div');
+            item.className = 'swipe-like-item';
+            item.innerHTML = `
+                ${show.poster ? `<img src="${show.poster}" alt="${displayTitle}" class="swipe-like-item__poster">` : ''}
+                <div class="swipe-like-item__info">
+                    <div class="swipe-like-item__title">${displayTitle}</div>
+                    <div class="swipe-like-item__meta">${year} ${genres ? `• ${genres}` : ''}</div>
+                </div>
+                <div class="swipe-like-item__rating rating--high">⭐️ ${rating}</div>
+            `;
+
+            item.addEventListener('click', () => {
+                closeSwipeModal();
+                openModal(show.id);
+            });
+
+            el.swipeLikesList.appendChild(item);
+        });
+    }
+
     // ==================== ЗАПУСК ====================
+    initSwipeCheck();
     init();
 }
 

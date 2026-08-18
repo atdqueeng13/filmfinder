@@ -148,6 +148,11 @@
             <span class="pill-btn__icon">✨</span>
             <span class="pill-btn__label">ИИ-запрос</span>
           </button>
+          <!-- Кнопка Swipe Check -->
+          <button class="pill-btn pill-btn--swipe" id="swipeCheckBtn" title="Swipe Check — поиск сериалов по вайбу">
+            <span class="pill-btn__icon">🔥</span>
+            <span class="pill-btn__label">Swipe Check</span>
+          </button>
         </div>
         <div class="header__actions">
           <!-- Кнопка настройки категорий -->
@@ -445,6 +450,69 @@
         <span class="load-more__info" id="loadMoreInfo"></span>
       </div>
     </main>
+  </div>
+
+  <!-- Swipe Check Vibe Matcher Modal -->
+  <div class="swipe-modal-overlay" id="swipeModalOverlay" style="display:none;">
+    <div class="swipe-modal">
+      <!-- Top header -->
+      <div class="swipe-modal__header">
+        <div class="swipe-modal__badge">
+          <span class="swipe-modal__badge-icon">🔥</span>
+          <span class="swipe-modal__badge-text">Swipe Check</span>
+        </div>
+        <div class="swipe-modal__stats" id="swipeVibeStatus">Поиск по вайбу</div>
+        <div class="swipe-modal__actions">
+          <button class="swipe-modal__btn swipe-modal__btn--likes" id="swipeOpenLikesBtn" title="Мой вайб-лист">
+            <span>❤️</span>
+            <span class="swipe-modal__likes-count" id="swipeLikesCount">0</span>
+          </button>
+          <button class="swipe-modal__btn swipe-modal__btn--close" id="swipeModalClose" title="Закрыть (Esc)">✕</button>
+        </div>
+      </div>
+
+      <!-- Main Deck Container -->
+      <div class="swipe-deck-container" id="swipeDeckContainer">
+        <div class="swipe-deck" id="swipeDeck">
+          <!-- Cards injected dynamically -->
+        </div>
+        <div class="swipe-loading" id="swipeLoading" style="display:none;">
+          <div class="swipe-loading__spinner"></div>
+          <div class="swipe-loading__text" id="swipeLoadingText">Подбираем сериалы по вашему вайбу...</div>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="swipe-controls">
+        <button class="swipe-btn swipe-btn--dislike" id="swipeDislikeBtn" title="Пропустить / Не моё (←)">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <button class="swipe-btn swipe-btn--info" id="swipeInfoBtn" title="Подробнее о сериале">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+        </button>
+        <button class="swipe-btn swipe-btn--like" id="swipeLikeBtn" title="Вайб! Добавить в список (→)">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        </button>
+      </div>
+
+      <!-- Keyboard hints -->
+      <div class="swipe-hint">
+        <span>← Влево (Мимо)</span>
+        <span>•</span>
+        <span>Вправо (Вайб) →</span>
+      </div>
+
+      <!-- Saved Likes Drawer -->
+      <div class="swipe-likes-drawer" id="swipeLikesDrawer" style="display:none;">
+        <div class="swipe-likes-drawer__header">
+          <div class="swipe-likes-drawer__title">❤️ Понравившиеся сериалы (<span id="swipeLikesTotal">0</span>)</div>
+          <button class="swipe-modal__btn" id="swipeCloseLikesBtn">✕</button>
+        </div>
+        <div class="swipe-likes-drawer__list" id="swipeLikesList">
+          <!-- Liked cards dynamically injected -->
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Modal Details -->
