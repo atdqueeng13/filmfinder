@@ -874,30 +874,48 @@ function startApp() {
     }
 
     async function callGeminiAPI(key, prompt) {
-        // Прямой сверхбыстрый вызов модели Google Gemini 3.7 Flash
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${key}`;
+        // Каскад высокоскоростных моделей Google Gemini с автоматическим переключением при сбоях/высокой нагрузке
+        const GEMINI_MODELS = [
+            'gemini-flash-lite-latest',
+            'gemini-3.5-flash-lite',
+            'gemini-3.5-flash',
+            'gemini-3.6-flash',
+            'gemini-3.7-flash'
+        ];
 
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                    temperature: 0.7
+        let lastError = null;
+
+        for (const model of GEMINI_MODELS) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: {
+                            temperature: 0.5,
+                            maxOutputTokens: 1200
+                        }
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text) return text;
+                } else {
+                    const errData = await response.json().catch(() => ({}));
+                    console.warn(`Модель ${model} вернула ${response.status}:`, errData?.error?.message);
+                    lastError = new Error(errData?.error?.message || `HTTP ${response.status}`);
                 }
-            })
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) return text;
-        } else {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(errData?.error?.message || `HTTP ${response.status}`);
+            } catch (err) {
+                console.warn(`Ошибка запроса к ${model}:`, err.message);
+                lastError = err;
+            }
         }
 
-        throw new Error('Не удалось получить ответ от Google Gemini 3.7 Flash');
+        throw lastError || new Error('Все модели ИИ временно недоступны. Попробуйте снова через минуту.');
     }
 
     function parseGeminiResponse(rawText) {

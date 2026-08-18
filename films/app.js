@@ -599,34 +599,47 @@ function startApp() {
     }
 
     async function callGeminiAPI(key, prompt) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${key}`;
+        const GEMINI_MODELS = [
+            'gemini-flash-lite-latest',
+            'gemini-3.5-flash-lite',
+            'gemini-3.5-flash',
+            'gemini-3.6-flash',
+            'gemini-3.7-flash'
+        ];
 
-        const payload = {
-            contents: [{
-                parts: [{ text: prompt }]
-            }],
-            generationConfig: {
-                temperature: 0.4,
-                topK: 40,
-                topP: 0.95,
-                maxOutputTokens: 2048,
+        let lastError = null;
+
+        for (const model of GEMINI_MODELS) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: {
+                            temperature: 0.4,
+                            maxOutputTokens: 1200
+                        }
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text) return text;
+                } else {
+                    const errData = await res.json().catch(() => ({}));
+                    console.warn(`Модель ${model} вернула ${res.status}:`, errData?.error?.message);
+                    lastError = new Error(errData?.error?.message || `Ошибка API (${res.status})`);
+                }
+            } catch (e) {
+                console.warn(`Ошибка запроса к ${model}:`, e.message);
+                lastError = e;
             }
-        };
-
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (res.ok) {
-            const data = await res.json();
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) return text;
         }
 
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData?.error?.message || `Ошибка Gemini API (${res.status})`);
+        throw lastError || new Error('Все модели ИИ временно недоступны. Попробуйте снова через минуту.');
     }
 
     function parseGeminiResponse(rawText) {
