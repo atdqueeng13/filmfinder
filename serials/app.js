@@ -2220,7 +2220,7 @@ function startApp() {
         });
     }
 
-    async function openSwipeModal() {
+    function openSwipeModal() {
         swipeState.isOpen = true;
         if (el.swipeModalOverlay) el.swipeModalOverlay.style.display = 'flex';
         document.body.style.overflow = 'hidden';
@@ -2229,7 +2229,7 @@ function startApp() {
         updateSwipeLikesUI();
 
         if (swipeState.deck.length === 0) {
-            await loadInitialSwipeDeck();
+            loadInitialSwipeDeck();
         } else {
             renderSwipeDeck();
         }
@@ -2242,42 +2242,48 @@ function startApp() {
         document.body.style.overflow = '';
     }
 
-    async function loadInitialSwipeDeck() {
-        showSwipeLoading(true, 'Загружаем стартовую колоду сериалов...');
-        swipeState.page = 1;
-
-        try {
-            let shows = [];
-            if (isAPIMode) {
-                const [res1, res2] = await Promise.all([
-                    TMDB.discover({ page: 1, sort: 'popularity-desc', minRating: 6.5 }),
-                    TMDB.discover({ page: 2, sort: 'popularity-desc', minRating: 6.5 })
-                ]);
-                const raw1 = (res1 && res1.results) || [];
-                const raw2 = (res2 && res2.results) || [];
-                shows = [...raw1, ...raw2].map(r => TMDB.mapShow(r, genreMap));
-            }
-
-            if (window.SERIES_DATA && Array.isArray(window.SERIES_DATA)) {
-                shows.push(...window.SERIES_DATA);
-            }
-
-            shows.forEach(show => {
+    function loadInitialSwipeDeck() {
+        // 1. Мгновенная инициализация из встроенной базы (0 мс задержки)
+        if (window.SERIES_DATA && Array.isArray(window.SERIES_DATA)) {
+            const shuffled = [...window.SERIES_DATA].sort(() => Math.random() - 0.5);
+            shuffled.forEach(show => {
                 if (show && show.poster && !swipeState.seenIds.has(show.id)) {
                     swipeState.deck.push(show);
                 }
             });
+        }
 
-            swipeState.deck.sort(() => Math.random() - 0.5);
-            renderSwipeDeck();
+        // 2. СРАЗУ отрисовываем карточку
+        renderSwipeDeck();
+
+        // 3. В фоне загружаем свежие сериалы из TMDB и подмешиваем в колоду
+        if (isAPIMode) {
+            fetchTMDBShowsForDeck();
+        }
+    }
+
+    async function fetchTMDBShowsForDeck() {
+        try {
+            const [res1, res2] = await Promise.all([
+                TMDB.discover({ page: 1, sort: 'popularity-desc', minRating: 6.5 }),
+                TMDB.discover({ page: 2, sort: 'popularity-desc', minRating: 6.5 })
+            ]);
+            const raw1 = (res1 && res1.results) || [];
+            const raw2 = (res2 && res2.results) || [];
+            const tmdbShows = [...raw1, ...raw2].map(r => TMDB.mapShow(r, genreMap));
+
+            const existingIds = new Set(swipeState.deck.map(s => s.id));
+            tmdbShows.forEach(show => {
+                if (show && show.poster && !swipeState.seenIds.has(show.id) && !existingIds.has(show.id)) {
+                    show._vibeScore = calculateVibeScore(show);
+                    swipeState.deck.push(show);
+                    existingIds.add(show.id);
+                }
+            });
+
+            sortDeckByVibe();
         } catch (err) {
-            console.error('Ошибка загрузки стартовой колоды:', err);
-            if (window.SERIES_DATA) {
-                swipeState.deck = [...window.SERIES_DATA].sort(() => Math.random() - 0.5);
-                renderSwipeDeck();
-            }
-        } finally {
-            showSwipeLoading(false);
+            console.warn('Фоновая загрузка TMDB для Swipe Check:', err);
         }
     }
 
