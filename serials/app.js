@@ -253,6 +253,7 @@ function startApp() {
         swipeModalOverlay: document.getElementById('swipeModalOverlay'),
         swipeModalClose: document.getElementById('swipeModalClose'),
         swipeDeck: document.getElementById('swipeDeck'),
+        swipeDeckContainer: document.getElementById('swipeDeckContainer'),
         swipeLoading: document.getElementById('swipeLoading'),
         swipeLoadingText: document.getElementById('swipeLoadingText'),
         swipeDislikeBtn: document.getElementById('swipeDislikeBtn'),
@@ -265,6 +266,11 @@ function startApp() {
         swipeLikesList: document.getElementById('swipeLikesList'),
         swipeLikesCount: document.getElementById('swipeLikesCount'),
         swipeLikesTotal: document.getElementById('swipeLikesTotal'),
+        // Vibe Picker Elements
+        vibePicker: document.getElementById('vibePicker'),
+        vibePickerGrid: document.getElementById('vibePickerGrid'),
+        swipeControls: document.getElementById('swipeControls'),
+        swipeHint: document.getElementById('swipeHint'),
     };
 
     // ==================== ИНИЦИАЛИЗАЦИЯ ====================
@@ -1948,6 +1954,8 @@ function startApp() {
         currentX: 0,
         currentY: 0,
         activeAnimFrame: null,
+        vibeCategory: null, // 'serious' | 'comedy' | 'anime' | 'cartoon'
+        vibeStartShow: null, // The show user clicked to start
     };
 
     let isDraggingCard = false;
@@ -2225,13 +2233,19 @@ function startApp() {
         if (el.swipeModalOverlay) el.swipeModalOverlay.style.display = 'flex';
         document.body.style.overflow = 'hidden';
 
-        updateSwipeVibeStatus();
         updateSwipeLikesUI();
 
-        if (swipeState.deck.length === 0) {
-            loadInitialSwipeDeck();
+        // Если категория ещё не выбрана — показываем пикер
+        if (!swipeState.vibeCategory) {
+            showVibePicker();
         } else {
-            renderSwipeDeck();
+            // Категория уже была выбрана ранее, продолжаем свайпы
+            showSwipeDeck();
+            if (swipeState.deck.length === 0) {
+                loadDeckForCategory();
+            } else {
+                renderSwipeDeck();
+            }
         }
     }
 
@@ -2240,33 +2254,184 @@ function startApp() {
         if (el.swipeModalOverlay) el.swipeModalOverlay.style.display = 'none';
         if (el.swipeLikesDrawer) el.swipeLikesDrawer.style.display = 'none';
         document.body.style.overflow = '';
+        // Сбрасываем категорию, чтобы при следующем открытии пользователь выбирал заново
+        swipeState.vibeCategory = null;
+        swipeState.vibeStartShow = null;
+        swipeState.deck = [];
+        swipeState.seenIds = new Set();
+        swipeState.genreWeights = {};
+        swipeState.likedSeriesQueue = [];
     }
 
-    function loadInitialSwipeDeck() {
-        // 1. Мгновенная инициализация из встроенной базы (0 мс задержки)
-        if (window.SERIES_DATA && Array.isArray(window.SERIES_DATA)) {
-            const shuffled = [...window.SERIES_DATA].sort(() => Math.random() - 0.5);
-            shuffled.forEach(show => {
-                if (show && show.poster && !swipeState.seenIds.has(show.id)) {
-                    swipeState.deck.push(show);
-                }
+    // ====== CATEGORY PICKER ======
+
+    function showVibePicker() {
+        if (el.vibePicker) el.vibePicker.style.display = 'flex';
+        if (el.swipeDeckContainer) el.swipeDeckContainer.style.display = 'none';
+        if (el.swipeControls) el.swipeControls.style.display = 'none';
+        if (el.swipeHint) el.swipeHint.style.display = 'none';
+        renderVibePicker();
+    }
+
+    function showSwipeDeck() {
+        if (el.vibePicker) el.vibePicker.style.display = 'none';
+        if (el.swipeDeckContainer) el.swipeDeckContainer.style.display = '';
+        if (el.swipeControls) el.swipeControls.style.display = '';
+        if (el.swipeHint) el.swipeHint.style.display = '';
+    }
+
+    function renderVibePicker() {
+        if (!el.vibePickerGrid) return;
+        el.vibePickerGrid.innerHTML = '';
+
+        const allShows = window.SERIES_DATA || [];
+
+        // Классифицируем все шоу
+        const serious = allShows.filter(s => {
+            if (isAnimeShow(s) || isCartoonShow(s)) return false;
+            const g = s.genres || [];
+            return g.some(genre => ['Фэнтези', 'Фантастика', 'Боевик', 'Триллер', 'Драма', 'Криминал', 'Научная фантастика', 'Детектив', 'Мистика'].includes(genre));
+        });
+        const comedy = allShows.filter(s => {
+            if (isAnimeShow(s) || isCartoonShow(s)) return false;
+            const g = s.genres || [];
+            return g.some(genre => ['Комедия', 'Мелодрама'].includes(genre));
+        });
+        const anime = allShows.filter(s => isAnimeShow(s));
+        const cartoon = allShows.filter(s => isCartoonShow(s));
+
+        // Случайный сериал из каждой категории
+        const pickRandom = (arr) => arr.length > 0 ? arr[Math.floor(Math.random() * arr.length)] : null;
+
+        const categories = [
+            { key: 'serious', emoji: '⚔️', label: 'Сериалы', sublabel: 'Фэнтези, боевик, триллер', show: pickRandom(serious) },
+            { key: 'comedy',  emoji: '😂', label: 'Комедии', sublabel: 'Ситкомы и комедии', show: pickRandom(comedy) },
+            { key: 'anime',   emoji: '🎌', label: 'Аниме', sublabel: 'Японская анимация', show: pickRandom(anime) },
+            { key: 'cartoon', emoji: '🎨', label: 'Мультсериалы', sublabel: 'Анимационные сериалы', show: pickRandom(cartoon) },
+        ];
+
+        categories.forEach(cat => {
+            const tile = document.createElement('div');
+            tile.className = 'vibe-tile';
+
+            const show = cat.show;
+            const posterUrl = show ? show.poster : '';
+            const showTitle = show ? (show.titleRu || show.title || '') : '';
+            const rating = show && typeof show.avgRating === 'number' ? show.avgRating.toFixed(1) : '';
+
+            tile.innerHTML = `
+                ${posterUrl ? `<img src="${posterUrl}" alt="${showTitle}" class="vibe-tile__poster" loading="eager">` : ''}
+                <div class="vibe-tile__overlay"></div>
+                ${rating ? `<div class="vibe-tile__rating">⭐ ${rating}</div>` : ''}
+                <div class="vibe-tile__content">
+                    <div class="vibe-tile__emoji">${cat.emoji}</div>
+                    <div class="vibe-tile__category">${cat.label}</div>
+                    <div class="vibe-tile__show-title">${showTitle}</div>
+                </div>
+            `;
+
+            tile.addEventListener('click', () => {
+                selectVibeCategory(cat.key, show);
             });
+
+            el.vibePickerGrid.appendChild(tile);
+        });
+    }
+
+    function selectVibeCategory(category, startShow) {
+        swipeState.vibeCategory = category;
+        swipeState.vibeStartShow = startShow;
+        swipeState.deck = [];
+        swipeState.seenIds = new Set();
+        swipeState.genreWeights = {};
+        swipeState.likedList = [];
+        swipeState.likedSeriesQueue = [];
+        swipeState.page = 1;
+
+        updateSwipeVibeStatus();
+        updateSwipeLikesUI();
+        showSwipeDeck();
+        loadDeckForCategory();
+    }
+
+    function matchesVibeCategory(show, category) {
+        if (!show) return false;
+        switch (category) {
+            case 'anime':   return isAnimeShow(show);
+            case 'cartoon': return isCartoonShow(show);
+            case 'comedy': {
+                if (isAnimeShow(show) || isCartoonShow(show)) return false;
+                const g = show.genres || [];
+                return g.some(genre => ['Комедия', 'Мелодрама'].includes(genre));
+            }
+            case 'serious': {
+                if (isAnimeShow(show) || isCartoonShow(show)) return false;
+                const g = show.genres || [];
+                return g.some(genre => ['Фэнтези', 'Фантастика', 'Боевик', 'Триллер', 'Драма', 'Криминал', 'Научная фантастика', 'Детектив', 'Мистика', 'Ужасы', 'Исторический', 'Биография'].includes(genre));
+            }
+            default: return true;
+        }
+    }
+
+    function loadDeckForCategory() {
+        const allShows = window.SERIES_DATA || [];
+        const category = swipeState.vibeCategory;
+        const startShow = swipeState.vibeStartShow;
+
+        // 1. Фильтруем все шоу по выбранной категории
+        let filtered = allShows.filter(s => s && s.poster && matchesVibeCategory(s, category) && !swipeState.seenIds.has(s.id));
+
+        // 2. Если есть стартовый сериал — ставим его первым
+        if (startShow) {
+            filtered = filtered.filter(s => s.id !== startShow.id);
+
+            // Сортируем: сначала похожие на стартовый (по жанрам)
+            const startGenres = new Set(startShow.genres || []);
+            filtered.sort((a, b) => {
+                const aMatch = (a.genres || []).filter(g => startGenres.has(g)).length;
+                const bMatch = (b.genres || []).filter(g => startGenres.has(g)).length;
+                if (bMatch !== aMatch) return bMatch - aMatch;
+                return (b.avgRating || 0) - (a.avgRating || 0);
+            });
+
+            // Стартовый сериал идёт первым
+            filtered.unshift(startShow);
+        } else {
+            filtered.sort(() => Math.random() - 0.5);
         }
 
-        // 2. СРАЗУ отрисовываем карточку
+        swipeState.deck = filtered;
         renderSwipeDeck();
 
-        // 3. В фоне загружаем свежие сериалы из TMDB и подмешиваем в колоду
+        // В фоне подгружаем из TMDB
         if (isAPIMode) {
-            fetchTMDBShowsForDeck();
+            fetchTMDBShowsForCategory();
         }
     }
 
-    async function fetchTMDBShowsForDeck() {
+    async function fetchTMDBShowsForCategory() {
         try {
+            const category = swipeState.vibeCategory;
+            const discoverOpts = { page: 1, sort: 'popularity-desc', minRating: 6.0 };
+
+            // Настраиваем фильтры TMDB по категории
+            if (category === 'anime') {
+                discoverOpts.genreIds = [16]; // Анимация
+                discoverOpts.withOriginalLanguage = 'ja';
+            } else if (category === 'cartoon') {
+                discoverOpts.genreIds = [16]; // Анимация
+                discoverOpts.withoutOriginalLanguage = 'ja';
+            } else if (category === 'comedy') {
+                discoverOpts.genreIds = [35]; // Комедия
+                discoverOpts.withoutGenreIds = [16]; // Без анимации
+            } else if (category === 'serious') {
+                discoverOpts.withoutGenreIds = [16, 35]; // Без анимации и комедий
+                discoverOpts.minRating = 7.0;
+            }
+
             const [res1, res2] = await Promise.all([
-                TMDB.discover({ page: 1, sort: 'popularity-desc', minRating: 6.5 }),
-                TMDB.discover({ page: 2, sort: 'popularity-desc', minRating: 6.5 })
+                TMDB.discover({ ...discoverOpts, page: 1 }),
+                TMDB.discover({ ...discoverOpts, page: 2 })
             ]);
             const raw1 = (res1 && res1.results) || [];
             const raw2 = (res2 && res2.results) || [];
@@ -2275,15 +2440,17 @@ function startApp() {
             const existingIds = new Set(swipeState.deck.map(s => s.id));
             tmdbShows.forEach(show => {
                 if (show && show.poster && !swipeState.seenIds.has(show.id) && !existingIds.has(show.id)) {
-                    show._vibeScore = calculateVibeScore(show);
-                    swipeState.deck.push(show);
-                    existingIds.add(show.id);
+                    if (matchesVibeCategory(show, category)) {
+                        show._vibeScore = calculateVibeScore(show);
+                        swipeState.deck.push(show);
+                        existingIds.add(show.id);
+                    }
                 }
             });
 
             sortDeckByVibe();
         } catch (err) {
-            console.warn('Фоновая загрузка TMDB для Swipe Check:', err);
+            console.warn('Фоновая загрузка TMDB для Vibe Check:', err);
         }
     }
 
@@ -2338,11 +2505,14 @@ function startApp() {
             }
 
             const existingIds = new Set(swipeState.deck.map(s => s.id));
+            const category = swipeState.vibeCategory;
             newShows.forEach(show => {
                 if (show && show.poster && !swipeState.seenIds.has(show.id) && !existingIds.has(show.id)) {
-                    show._vibeScore = calculateVibeScore(show);
-                    swipeState.deck.push(show);
-                    existingIds.add(show.id);
+                    if (!category || matchesVibeCategory(show, category)) {
+                        show._vibeScore = calculateVibeScore(show);
+                        swipeState.deck.push(show);
+                        existingIds.add(show.id);
+                    }
                 }
             });
 
@@ -2390,9 +2560,16 @@ function startApp() {
 
     function updateSwipeVibeStatus() {
         if (!el.swipeVibeStatus) return;
-        const top = getTopVibeGenres(2);
-        if (top.length > 0) {
-            el.swipeVibeStatus.textContent = `Вайб: ${top.join(', ')}`;
+        const catNames = {
+            'serious': '⚔️ Сериалы',
+            'comedy': '😂 Комедии',
+            'anime': '🎌 Аниме',
+            'cartoon': '🎨 Мульты'
+        };
+        if (swipeState.vibeCategory && catNames[swipeState.vibeCategory]) {
+            const top = getTopVibeGenres(2);
+            const extra = top.length > 0 ? ` • ${top.join(', ')}` : '';
+            el.swipeVibeStatus.textContent = catNames[swipeState.vibeCategory] + extra;
         } else {
             el.swipeVibeStatus.textContent = 'Поиск по вайбу';
         }
@@ -2500,9 +2677,9 @@ function startApp() {
     }
 
     function getCategoryTag(show) {
-        if (isAnime(show)) return 'Аниме';
-        if (isCartoon(show)) return 'Мультсериал';
-        if (isDorama(show)) return 'Дорама';
+        if (isAnimeShow(show)) return 'Аниме';
+        if (isCartoonShow(show)) return 'Мультсериал';
+        if (isDoramaShow(show)) return 'Дорама';
         return 'Сериал';
     }
 

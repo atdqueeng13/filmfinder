@@ -467,8 +467,17 @@
         </div>
       </div>
 
-      <!-- Main Deck Container -->
-      <div class="swipe-deck-container" id="swipeDeckContainer">
+      <!-- Category Picker (initial screen) -->
+      <div class="vibe-picker" id="vibePicker">
+        <div class="vibe-picker__title">Что сегодня смотрим?</div>
+        <div class="vibe-picker__subtitle">Выберите категорию для вайб-подбора</div>
+        <div class="vibe-picker__grid" id="vibePickerGrid">
+          <!-- 4 category tiles injected dynamically -->
+        </div>
+      </div>
+
+      <!-- Main Deck Container (hidden until category selected) -->
+      <div class="swipe-deck-container" id="swipeDeckContainer" style="display:none;">
         <div class="swipe-deck" id="swipeDeck">
           <!-- Cards injected dynamically -->
         </div>
@@ -478,8 +487,8 @@
         </div>
       </div>
 
-      <!-- Action Buttons -->
-      <div class="swipe-controls">
+      <!-- Action Buttons (hidden until category selected) -->
+      <div class="swipe-controls" id="swipeControls" style="display:none;">
         <button class="swipe-btn swipe-btn--dislike" id="swipeDislikeBtn" title="Пропустить / Не моё (←)">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
@@ -491,8 +500,8 @@
         </button>
       </div>
 
-      <!-- Keyboard hints -->
-      <div class="swipe-hint">
+      <!-- Keyboard hints (hidden until category selected) -->
+      <div class="swipe-hint" id="swipeHint" style="display:none;">
         <span>← Влево (Мимо)</span>
         <span>•</span>
         <span>Вправо (Вайб) →</span>
