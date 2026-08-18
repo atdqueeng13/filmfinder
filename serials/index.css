@@ -3173,7 +3173,9 @@ If they are direct children of .app, we can use CSS Grid or just flex row after 
 /* Card Info Overlay */
 .swipe-card__info {
   position: absolute;
-  inset-x: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
   bottom: 0;
   padding: 50px 18px 18px 18px;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.75) 60%, transparent 100%);

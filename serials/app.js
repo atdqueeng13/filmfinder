@@ -1950,6 +1950,13 @@ function startApp() {
         activeAnimFrame: null,
     };
 
+    let isDraggingCard = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let dragDeltaX = 0;
+    let dragDeltaY = 0;
+    let activeCardEl = null;
+
     function initSwipeCheck() {
         if (!el.swipeCheckBtn) return;
 
@@ -1964,7 +1971,8 @@ function startApp() {
 
         // Кнопки управления
         if (el.swipeDislikeBtn) {
-            el.swipeDislikeBtn.addEventListener('click', () => {
+            el.swipeDislikeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 if (!swipeState.isAnimating && swipeState.deck.length > 0) {
                     performSwipe('left');
                 }
@@ -1972,7 +1980,8 @@ function startApp() {
         }
 
         if (el.swipeLikeBtn) {
-            el.swipeLikeBtn.addEventListener('click', () => {
+            el.swipeLikeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 if (!swipeState.isAnimating && swipeState.deck.length > 0) {
                     performSwipe('right');
                 }
@@ -1980,7 +1989,8 @@ function startApp() {
         }
 
         if (el.swipeInfoBtn) {
-            el.swipeInfoBtn.addEventListener('click', () => {
+            el.swipeInfoBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 const current = swipeState.deck[0];
                 if (current) {
                     openModal(current.id);
@@ -2002,6 +2012,13 @@ function startApp() {
             });
         }
 
+        // ЕДИНЫЕ ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ ДВИЖЕНИЯ И ОТПУСКАНИЯ
+        window.addEventListener('mousemove', onGlobalDragMove);
+        window.addEventListener('mouseup', onGlobalDragEnd);
+        window.addEventListener('touchmove', onGlobalDragMove, { passive: false });
+        window.addEventListener('touchend', onGlobalDragEnd);
+        window.addEventListener('touchcancel', onGlobalDragEnd);
+
         // Управление с клавиатуры
         window.addEventListener('keydown', (e) => {
             if (!swipeState.isOpen) return;
@@ -2021,392 +2038,91 @@ function startApp() {
         });
     }
 
-    async function openSwipeModal() {
-        swipeState.isOpen = true;
-        if (el.swipeModalOverlay) el.swipeModalOverlay.style.display = 'flex';
-        document.body.style.overflow = 'hidden';
+    function onGlobalDragMove(e) {
+        if (!isDraggingCard || !activeCardEl) return;
 
-        updateSwipeVibeStatus();
-        updateSwipeLikesUI();
+        const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+        const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
 
-        if (swipeState.deck.length === 0) {
-            await loadInitialSwipeDeck();
+        dragDeltaX = clientX - dragStartX;
+        dragDeltaY = clientY - dragStartY;
+
+        if (e.cancelable && Math.abs(dragDeltaX) > 4) {
+            e.preventDefault();
+        }
+
+        const rot = dragDeltaX * 0.08;
+        activeCardEl.style.transform = `translate3d(${dragDeltaX}px, ${dragDeltaY}px, 0) rotate(${rot}deg)`;
+
+        const likeStamp = activeCardEl.querySelector('.swipe-stamp--like');
+        const nopeStamp = activeCardEl.querySelector('.swipe-stamp--nope');
+
+        if (dragDeltaX > 15) {
+            const op = Math.min(1, (dragDeltaX - 15) / 75);
+            if (likeStamp) likeStamp.style.opacity = op;
+            if (nopeStamp) nopeStamp.style.opacity = 0;
+        } else if (dragDeltaX < -15) {
+            const op = Math.min(1, (-dragDeltaX - 15) / 75);
+            if (nopeStamp) nopeStamp.style.opacity = op;
+            if (likeStamp) likeStamp.style.opacity = 0;
         } else {
-            renderSwipeDeck();
+            if (likeStamp) likeStamp.style.opacity = 0;
+            if (nopeStamp) nopeStamp.style.opacity = 0;
         }
     }
 
-    function closeSwipeModal() {
-        swipeState.isOpen = false;
-        if (el.swipeModalOverlay) el.swipeModalOverlay.style.display = 'none';
-        if (el.swipeLikesDrawer) el.swipeLikesDrawer.style.display = 'none';
-        document.body.style.overflow = '';
-    }
+    function onGlobalDragEnd() {
+        if (!isDraggingCard || !activeCardEl) return;
+        isDraggingCard = false;
+        const cardEl = activeCardEl;
+        activeCardEl = null;
 
-    async function loadInitialSwipeDeck() {
-        showSwipeLoading(true, 'Загружаем стартовую колоду сериалов...');
-        swipeState.page = 1;
+        const threshold = 65;
 
-        try {
-            let shows = [];
-            if (isAPIMode) {
-                // Загружаем 2 страницы сразу (40 сериалов)
-                const [res1, res2] = await Promise.all([
-                    TMDB.discover({ page: 1, sort: 'popularity-desc', minRating: 6.5 }),
-                    TMDB.discover({ page: 2, sort: 'popularity-desc', minRating: 6.5 })
-                ]);
-                const raw1 = (res1 && res1.results) || [];
-                const raw2 = (res2 && res2.results) || [];
-                shows = [...raw1, ...raw2].map(r => TMDB.mapShow(r, genreMap));
-            }
-
-            // Дополняем локальной базой для 100% надежности
-            if (window.SERIES_DATA && Array.isArray(window.SERIES_DATA)) {
-                shows.push(...window.SERIES_DATA);
-            }
-
-            shows.forEach(show => {
-                if (show && show.poster && !swipeState.seenIds.has(show.id)) {
-                    swipeState.deck.push(show);
-                }
-            });
-
-            // Перемешиваем для стартового разнообразия
-            swipeState.deck.sort(() => Math.random() - 0.5);
-            renderSwipeDeck();
-        } catch (err) {
-            console.error('Ошибка загрузки стартовой колоды Swipe Check:', err);
-            if (window.SERIES_DATA) {
-                swipeState.deck = [...window.SERIES_DATA].sort(() => Math.random() - 0.5);
-                renderSwipeDeck();
-            }
-        } finally {
-            showSwipeLoading(false);
-        }
-    }
-
-    async function refillSwipeDeck() {
-        if (swipeState.isFetching) return;
-        swipeState.isFetching = true;
-
-        try {
-            let newShows = [];
-
-            // 1. Если есть лайкнутые сериалы, запрашиваем рекомендации от TMDB
-            if (isAPIMode && swipeState.likedSeriesQueue.length > 0) {
-                const targetId = swipeState.likedSeriesQueue[swipeState.likedSeriesQueue.length - 1];
-                try {
-                    const recs = await TMDB.getRecommendations(targetId);
-                    if (recs && recs.results && recs.results.length > 0) {
-                        newShows.push(...recs.results.map(r => TMDB.mapShow(r, genreMap)));
-                    }
-                } catch(e) {}
-
-                if (newShows.length < 8) {
-                    try {
-                        const sim = await TMDB.getSimilar(targetId);
-                        if (sim && sim.results) {
-                            newShows.push(...sim.results.map(r => TMDB.mapShow(r, genreMap)));
-                        }
-                    } catch(e) {}
-                }
-            }
-
-            // 2. Дополнительно запрашиваем через Discover по топовым жанрам
-            if (isAPIMode && newShows.length < 12) {
-                swipeState.page++;
-                const topGenres = getTopVibeGenres(2);
-                const genreIds = topGenres.map(g => genreReverseMap[g]).filter(Boolean);
-
-                const discOptions = {
-                    page: swipeState.page,
-                    sort: 'popularity-desc',
-                    minRating: 6.0
-                };
-                if (genreIds.length > 0) {
-                    discOptions.genreIds = genreIds;
-                }
-
-                try {
-                    const discRes = await TMDB.discover(discOptions);
-                    if (discRes && discRes.results) {
-                        newShows.push(...discRes.results.map(r => TMDB.mapShow(r, genreMap)));
-                    }
-                } catch(e) {}
-            }
-
-            // 3. Fallback на локальную базу
-            if (window.SERIES_DATA) {
-                newShows.push(...window.SERIES_DATA);
-            }
-
-            // Добавляем только непросмотренные и уникальные
-            const existingIds = new Set(swipeState.deck.map(s => s.id));
-            newShows.forEach(show => {
-                if (show && show.poster && !swipeState.seenIds.has(show.id) && !existingIds.has(show.id)) {
-                    show._vibeScore = calculateVibeScore(show);
-                    swipeState.deck.push(show);
-                    existingIds.add(show.id);
-                }
-            });
-
-            // Сортируем колоду по соответствию вайбу
-            sortDeckByVibe();
-
-            // Если колода была пустой на экране — сразу отрисовываем
-            if (swipeState.deck.length > 0 && (!swipeState.topCardEl || el.swipeDeck.children.length === 0)) {
-                renderSwipeDeck();
-            }
-        } catch (err) {
-            console.warn('Ошибка пополнения колоды Swipe Check:', err);
-        } finally {
-            swipeState.isFetching = false;
-        }
-    }
-
-    function calculateVibeScore(show) {
-        let score = 0;
-        const genres = show.genres || [];
-        genres.forEach(g => {
-            if (swipeState.genreWeights[g]) {
-                score += swipeState.genreWeights[g];
-            }
-        });
-        if (show.country && swipeState.genreWeights[show.country]) {
-            score += swipeState.genreWeights[show.country];
-        }
-        return score;
-    }
-
-    function sortDeckByVibe() {
-        if (Object.keys(swipeState.genreWeights).length === 0) return;
-        if (swipeState.deck.length <= 2) return;
-        const topTwo = swipeState.deck.slice(0, 2);
-        const rest = swipeState.deck.slice(2);
-
-        rest.sort((a, b) => (b._vibeScore || calculateVibeScore(b)) - (a._vibeScore || calculateVibeScore(a)));
-        swipeState.deck = [...topTwo, ...rest];
-    }
-
-    function getTopVibeGenres(limit = 2) {
-        return Object.entries(swipeState.genreWeights)
-            .filter(([key, weight]) => weight > 0)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, limit)
-            .map(([genre]) => genre);
-    }
-
-    function updateSwipeVibeStatus() {
-        if (!el.swipeVibeStatus) return;
-        const top = getTopVibeGenres(2);
-        if (top.length > 0) {
-            el.swipeVibeStatus.textContent = `Вайб: ${top.join(', ')}`;
+        if (dragDeltaX > threshold) {
+            performSwipe('right');
+        } else if (dragDeltaX < -threshold) {
+            performSwipe('left');
         } else {
-            el.swipeVibeStatus.textContent = 'Поиск по вайбу';
+            // Пружинный возврат в центр
+            cardEl.style.transition = 'transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            cardEl.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
+            const likeStamp = cardEl.querySelector('.swipe-stamp--like');
+            const nopeStamp = cardEl.querySelector('.swipe-stamp--nope');
+            if (likeStamp) {
+                likeStamp.style.transition = 'opacity 0.2s ease';
+                likeStamp.style.opacity = 0;
+            }
+            if (nopeStamp) {
+                nopeStamp.style.transition = 'opacity 0.2s ease';
+                nopeStamp.style.opacity = 0;
+            }
         }
     }
-
-    function updateSwipeLikesUI() {
-        const count = swipeState.likedList.length;
-        if (el.swipeLikesCount) el.swipeLikesCount.textContent = count;
-        if (el.swipeLikesTotal) el.swipeLikesTotal.textContent = count;
-    }
-
-    function showSwipeLoading(show, text = '') {
-        if (el.swipeLoading) {
-            el.swipeLoading.style.display = show ? 'flex' : 'none';
-        }
-        if (el.swipeLoadingText && text) {
-            el.swipeLoadingText.textContent = text;
-        }
-    }
-
-    // ==================== РЕНДЕРИНГ КОЛОДЫ ====================
-
-    function renderSwipeDeck() {
-        if (!el.swipeDeck) return;
-        el.swipeDeck.innerHTML = '';
-        swipeState.topCardEl = null;
-
-        if (swipeState.deck.length === 0) {
-            showSwipeLoading(true, 'Подбираем сериалы под ваш вайб...');
-            refillSwipeDeck();
-            return;
-        }
-
-        showSwipeLoading(false);
-
-        // Рендерим заднюю карточку (если есть)
-        if (swipeState.deck.length > 1) {
-            const backItem = swipeState.deck[1];
-            const backCard = createCardElement(backItem, false);
-            el.swipeDeck.appendChild(backCard);
-        }
-
-        // Рендерим верхнюю карточку
-        const frontItem = swipeState.deck[0];
-        const frontCard = createCardElement(frontItem, true);
-        el.swipeDeck.appendChild(frontCard);
-        swipeState.topCardEl = frontCard;
-
-        // Навешиваем физику жестов на верхнюю карточку
-        bindSwipePhysics(frontCard);
-
-        // Если в колоде осталось мало карточек, заранее пополняем
-        if (swipeState.deck.length < 8) {
-            refillSwipeDeck();
-        }
-    }
-
-    function createCardElement(show, isFront) {
-        const card = document.createElement('div');
-        card.className = `swipe-card ${isFront ? 'swipe-card--front' : 'swipe-card--back'}`;
-        card.dataset.id = show.id;
-
-        const displayTitle = show.titleRu || show.title || 'Без названия';
-        const displayOrig = show.title && show.title !== displayTitle ? show.title : '';
-        const rating = typeof show.avgRating === 'number' ? show.avgRating.toFixed(1) : (show.vote_average ? show.vote_average.toFixed(1) : '—');
-        const year = show.year || '';
-        const country = show.country || '';
-        const genres = (show.genres || []).slice(0, 3);
-
-        const categoryTag = getCategoryTag(show);
-
-        card.innerHTML = `
-            ${show.poster ? `
-                <img src="${show.poster}" alt="${displayTitle}" class="swipe-card__poster" loading="eager"
-                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-            ` : ''}
-            <div class="swipe-card__fallback" style="${show.poster ? 'display:none;' : 'display:flex;'}">
-                ${displayTitle.charAt(0).toUpperCase()}
-            </div>
-
-            <!-- Верхние бейджи -->
-            <div class="swipe-card__rating-badge">⭐️ ${rating}</div>
-            ${categoryTag ? `<div class="swipe-card__category-badge">${categoryTag}</div>` : ''}
-
-            <!-- Динамические неоновые штампы -->
-            <div class="swipe-stamp swipe-stamp--like">👍 ВАЙБ</div>
-            <div class="swipe-stamp swipe-stamp--nope">👎 МИМО</div>
-
-            <!-- Нижняя информация -->
-            <div class="swipe-card__info">
-                <h2 class="swipe-card__title">${displayTitle}</h2>
-                ${displayOrig ? `<div class="swipe-card__title-orig">${displayOrig}</div>` : ''}
-                <div class="swipe-card__meta-row">
-                    ${year ? `<span>${year}</span>` : ''}
-                    ${year && country ? `<span class="swipe-card__dot">•</span>` : ''}
-                    ${country ? `<span>${country}</span>` : ''}
-                </div>
-                ${genres.length > 0 ? `
-                    <div class="swipe-card__genres">
-                        ${genres.map(g => `<span class="swipe-card__genre-tag">${g}</span>`).join('')}
-                    </div>
-                ` : ''}
-            </div>
-        `;
-
-        return card;
-    }
-
-    function getCategoryTag(show) {
-        if (isAnime(show)) return 'Аниме';
-        if (isCartoon(show)) return 'Мультсериал';
-        if (isDorama(show)) return 'Дорама';
-        return 'Сериал';
-    }
-
-    // ==================== ЖЕСТЫ И ФИЗИКА СВАЙПА ====================
 
     function bindSwipePhysics(cardEl) {
-        let isDown = false;
-        let startX = 0;
-        let startY = 0;
-        let currentDeltaX = 0;
-        let currentDeltaY = 0;
-
-        const likeStamp = cardEl.querySelector('.swipe-stamp--like');
-        const nopeStamp = cardEl.querySelector('.swipe-stamp--nope');
-
-        function onStart(e) {
-            if (swipeState.isAnimating) return;
-            isDown = true;
-            swipeState.isDragging = true;
-
-            const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
-            const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-
-            startX = clientX;
-            startY = clientY;
-            currentDeltaX = 0;
-            currentDeltaY = 0;
-
+        cardEl.addEventListener('mousedown', (e) => {
+            if (swipeState.isAnimating || e.button !== 0) return;
+            e.preventDefault();
+            isDraggingCard = true;
+            activeCardEl = cardEl;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            dragDeltaX = 0;
+            dragDeltaY = 0;
             cardEl.style.transition = 'none';
-        }
+        });
 
-        function onMove(e) {
-            if (!isDown) return;
-
-            const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
-            const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-
-            currentDeltaX = clientX - startX;
-            currentDeltaY = clientY - startY;
-
-            const rot = currentDeltaX * 0.07;
-            cardEl.style.transform = `translate3d(${currentDeltaX}px, ${currentDeltaY}px, 0) rotate(${rot}deg)`;
-
-            // Проявление штампов
-            if (currentDeltaX > 20) {
-                const opacity = Math.min(1, (currentDeltaX - 20) / 90);
-                if (likeStamp) likeStamp.style.opacity = opacity;
-                if (nopeStamp) nopeStamp.style.opacity = 0;
-            } else if (currentDeltaX < -20) {
-                const opacity = Math.min(1, (-currentDeltaX - 20) / 90);
-                if (nopeStamp) nopeStamp.style.opacity = opacity;
-                if (likeStamp) likeStamp.style.opacity = 0;
-            } else {
-                if (likeStamp) likeStamp.style.opacity = 0;
-                if (nopeStamp) nopeStamp.style.opacity = 0;
-            }
-        }
-
-        function onEnd() {
-            if (!isDown) return;
-            isDown = false;
-            swipeState.isDragging = false;
-
-            const threshold = 75;
-
-            if (currentDeltaX > threshold) {
-                performSwipe('right');
-            } else if (currentDeltaX < -threshold) {
-                performSwipe('left');
-            } else {
-                // Пружинный возврат в центр
-                cardEl.style.transition = 'transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
-                cardEl.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
-                if (likeStamp) {
-                    likeStamp.style.transition = 'opacity 0.2s ease';
-                    likeStamp.style.opacity = 0;
-                }
-                if (nopeStamp) {
-                    nopeStamp.style.transition = 'opacity 0.2s ease';
-                    nopeStamp.style.opacity = 0;
-                }
-            }
-        }
-
-        // Мышь
-        cardEl.addEventListener('mousedown', onStart);
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onEnd);
-
-        // Тач-события (смартфоны)
-        cardEl.addEventListener('touchstart', onStart, { passive: true });
-        window.addEventListener('touchmove', onMove, { passive: true });
-        window.addEventListener('touchend', onEnd);
-        window.addEventListener('touchcancel', onEnd);
+        cardEl.addEventListener('touchstart', (e) => {
+            if (swipeState.isAnimating) return;
+            isDraggingCard = true;
+            activeCardEl = cardEl;
+            dragStartX = e.touches[0].clientX;
+            dragStartY = e.touches[0].clientY;
+            dragDeltaX = 0;
+            dragDeltaY = 0;
+            cardEl.style.transition = 'none';
+        }, { passive: true });
     }
 
     function performSwipe(direction) {
@@ -2502,6 +2218,286 @@ function startApp() {
 
             el.swipeLikesList.appendChild(item);
         });
+    }
+
+    async function openSwipeModal() {
+        swipeState.isOpen = true;
+        if (el.swipeModalOverlay) el.swipeModalOverlay.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+
+        updateSwipeVibeStatus();
+        updateSwipeLikesUI();
+
+        if (swipeState.deck.length === 0) {
+            await loadInitialSwipeDeck();
+        } else {
+            renderSwipeDeck();
+        }
+    }
+
+    function closeSwipeModal() {
+        swipeState.isOpen = false;
+        if (el.swipeModalOverlay) el.swipeModalOverlay.style.display = 'none';
+        if (el.swipeLikesDrawer) el.swipeLikesDrawer.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    async function loadInitialSwipeDeck() {
+        showSwipeLoading(true, 'Загружаем стартовую колоду сериалов...');
+        swipeState.page = 1;
+
+        try {
+            let shows = [];
+            if (isAPIMode) {
+                const [res1, res2] = await Promise.all([
+                    TMDB.discover({ page: 1, sort: 'popularity-desc', minRating: 6.5 }),
+                    TMDB.discover({ page: 2, sort: 'popularity-desc', minRating: 6.5 })
+                ]);
+                const raw1 = (res1 && res1.results) || [];
+                const raw2 = (res2 && res2.results) || [];
+                shows = [...raw1, ...raw2].map(r => TMDB.mapShow(r, genreMap));
+            }
+
+            if (window.SERIES_DATA && Array.isArray(window.SERIES_DATA)) {
+                shows.push(...window.SERIES_DATA);
+            }
+
+            shows.forEach(show => {
+                if (show && show.poster && !swipeState.seenIds.has(show.id)) {
+                    swipeState.deck.push(show);
+                }
+            });
+
+            swipeState.deck.sort(() => Math.random() - 0.5);
+            renderSwipeDeck();
+        } catch (err) {
+            console.error('Ошибка загрузки стартовой колоды:', err);
+            if (window.SERIES_DATA) {
+                swipeState.deck = [...window.SERIES_DATA].sort(() => Math.random() - 0.5);
+                renderSwipeDeck();
+            }
+        } finally {
+            showSwipeLoading(false);
+        }
+    }
+
+    async function refillSwipeDeck() {
+        if (swipeState.isFetching) return;
+        swipeState.isFetching = true;
+
+        try {
+            let newShows = [];
+
+            if (isAPIMode && swipeState.likedSeriesQueue.length > 0) {
+                const targetId = swipeState.likedSeriesQueue[swipeState.likedSeriesQueue.length - 1];
+                try {
+                    const recs = await TMDB.getRecommendations(targetId);
+                    if (recs && recs.results && recs.results.length > 0) {
+                        newShows.push(...recs.results.map(r => TMDB.mapShow(r, genreMap)));
+                    }
+                } catch(e) {}
+
+                if (newShows.length < 8) {
+                    try {
+                        const sim = await TMDB.getSimilar(targetId);
+                        if (sim && sim.results) {
+                            newShows.push(...sim.results.map(r => TMDB.mapShow(r, genreMap)));
+                        }
+                    } catch(e) {}
+                }
+            }
+
+            if (isAPIMode && newShows.length < 12) {
+                swipeState.page++;
+                const topGenres = getTopVibeGenres(2);
+                const genreIds = topGenres.map(g => genreReverseMap[g]).filter(Boolean);
+
+                const discOptions = {
+                    page: swipeState.page,
+                    sort: 'popularity-desc',
+                    minRating: 6.0
+                };
+                if (genreIds.length > 0) discOptions.genreIds = genreIds;
+
+                try {
+                    const discRes = await TMDB.discover(discOptions);
+                    if (discRes && discRes.results) {
+                        newShows.push(...discRes.results.map(r => TMDB.mapShow(r, genreMap)));
+                    }
+                } catch(e) {}
+            }
+
+            if (window.SERIES_DATA) {
+                newShows.push(...window.SERIES_DATA);
+            }
+
+            const existingIds = new Set(swipeState.deck.map(s => s.id));
+            newShows.forEach(show => {
+                if (show && show.poster && !swipeState.seenIds.has(show.id) && !existingIds.has(show.id)) {
+                    show._vibeScore = calculateVibeScore(show);
+                    swipeState.deck.push(show);
+                    existingIds.add(show.id);
+                }
+            });
+
+            sortDeckByVibe();
+
+            if (swipeState.deck.length > 0 && (!swipeState.topCardEl || el.swipeDeck.children.length === 0)) {
+                renderSwipeDeck();
+            }
+        } catch (err) {
+            console.warn('Ошибка пополнения колоды:', err);
+        } finally {
+            swipeState.isFetching = false;
+        }
+    }
+
+    function calculateVibeScore(show) {
+        let score = 0;
+        const genres = show.genres || [];
+        genres.forEach(g => {
+            if (swipeState.genreWeights[g]) score += swipeState.genreWeights[g];
+        });
+        if (show.country && swipeState.genreWeights[show.country]) {
+            score += swipeState.genreWeights[show.country];
+        }
+        return score;
+    }
+
+    function sortDeckByVibe() {
+        if (Object.keys(swipeState.genreWeights).length === 0) return;
+        if (swipeState.deck.length <= 2) return;
+        const topTwo = swipeState.deck.slice(0, 2);
+        const rest = swipeState.deck.slice(2);
+
+        rest.sort((a, b) => (b._vibeScore || calculateVibeScore(b)) - (a._vibeScore || calculateVibeScore(a)));
+        swipeState.deck = [...topTwo, ...rest];
+    }
+
+    function getTopVibeGenres(limit = 2) {
+        return Object.entries(swipeState.genreWeights)
+            .filter(([key, weight]) => weight > 0)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, limit)
+            .map(([genre]) => genre);
+    }
+
+    function updateSwipeVibeStatus() {
+        if (!el.swipeVibeStatus) return;
+        const top = getTopVibeGenres(2);
+        if (top.length > 0) {
+            el.swipeVibeStatus.textContent = `Вайб: ${top.join(', ')}`;
+        } else {
+            el.swipeVibeStatus.textContent = 'Поиск по вайбу';
+        }
+    }
+
+    function updateSwipeLikesUI() {
+        const count = swipeState.likedList.length;
+        if (el.swipeLikesCount) el.swipeLikesCount.textContent = count;
+        if (el.swipeLikesTotal) el.swipeLikesTotal.textContent = count;
+    }
+
+    function showSwipeLoading(show, text = '') {
+        if (el.swipeLoading) {
+            el.swipeLoading.style.display = show ? 'flex' : 'none';
+        }
+        if (el.swipeLoadingText && text) {
+            el.swipeLoadingText.textContent = text;
+        }
+    }
+
+    function renderSwipeDeck() {
+        if (!el.swipeDeck) return;
+        el.swipeDeck.innerHTML = '';
+        swipeState.topCardEl = null;
+
+        if (swipeState.deck.length === 0) {
+            showSwipeLoading(true, 'Подбираем сериалы под ваш вайб...');
+            refillSwipeDeck();
+            return;
+        }
+
+        showSwipeLoading(false);
+
+        // Рендерим заднюю карточку (если есть)
+        if (swipeState.deck.length > 1) {
+            const backItem = swipeState.deck[1];
+            const backCard = createCardElement(backItem, false);
+            el.swipeDeck.appendChild(backCard);
+        }
+
+        // Рендерим верхнюю карточку
+        const frontItem = swipeState.deck[0];
+        const frontCard = createCardElement(frontItem, true);
+        el.swipeDeck.appendChild(frontCard);
+        swipeState.topCardEl = frontCard;
+
+        // Навешиваем физику жестов на верхнюю карточку
+        bindSwipePhysics(frontCard);
+
+        // Если в колоде осталось мало карточек, заранее пополняем
+        if (swipeState.deck.length < 8) {
+            refillSwipeDeck();
+        }
+    }
+
+    function createCardElement(show, isFront) {
+        const card = document.createElement('div');
+        card.className = `swipe-card ${isFront ? 'swipe-card--front' : 'swipe-card--back'}`;
+        card.dataset.id = show.id;
+
+        const displayTitle = show.titleRu || show.title || 'Без названия';
+        const displayOrig = show.title && show.title !== displayTitle ? show.title : '';
+        const rating = typeof show.avgRating === 'number' ? show.avgRating.toFixed(1) : (show.vote_average ? show.vote_average.toFixed(1) : '—');
+        const year = show.year || '';
+        const country = show.country || '';
+        const genres = (show.genres || []).slice(0, 3);
+
+        const categoryTag = getCategoryTag(show);
+
+        card.innerHTML = `
+            ${show.poster ? `
+                <img src="${show.poster}" alt="${displayTitle}" class="swipe-card__poster" loading="eager"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            ` : ''}
+            <div class="swipe-card__fallback" style="${show.poster ? 'display:none;' : 'display:flex;'}">
+                ${displayTitle.charAt(0).toUpperCase()}
+            </div>
+
+            <!-- Верхние бейджи -->
+            <div class="swipe-card__rating-badge">⭐️ ${rating}</div>
+            ${categoryTag ? `<div class="swipe-card__category-badge">${categoryTag}</div>` : ''}
+
+            <!-- Динамические неоновые штампы -->
+            <div class="swipe-stamp swipe-stamp--like">👍 ВАЙБ</div>
+            <div class="swipe-stamp swipe-stamp--nope">👎 МИМО</div>
+
+            <!-- Нижняя информация -->
+            <div class="swipe-card__info">
+                <h2 class="swipe-card__title">${displayTitle}</h2>
+                ${displayOrig ? `<div class="swipe-card__title-orig">${displayOrig}</div>` : ''}
+                <div class="swipe-card__meta-row">
+                    ${year ? `<span>${year}</span>` : ''}
+                    ${year && country ? `<span class="swipe-card__dot">•</span>` : ''}
+                    ${country ? `<span>${country}</span>` : ''}
+                </div>
+                ${genres.length > 0 ? `
+                    <div class="swipe-card__genres">
+                        ${genres.map(g => `<span class="swipe-card__genre-tag">${g}</span>`).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+
+        return card;
+    }
+
+    function getCategoryTag(show) {
+        if (isAnime(show)) return 'Аниме';
+        if (isCartoon(show)) return 'Мультсериал';
+        if (isDorama(show)) return 'Дорама';
+        return 'Сериал';
     }
 
     // ==================== ЗАПУСК ====================
