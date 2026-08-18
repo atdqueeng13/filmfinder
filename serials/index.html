@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SerialFinder — Поиск сериалов</title>
+  <meta name="description" content="Удобный поиск и фильтрация лучших сериалов, аниме, мультсериалов и дорам. База из 170 000+ сериалов.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <!-- 1. Content Preferences Modal (Что вы хотите смотреть) -->
+  <div class="api-modal-overlay" id="contentPrefsModal" style="display:none;">
+    <div class="api-modal api-modal--prefs">
+      <div class="api-modal__icon">📺</div>
+      <h2 class="api-modal__title">Что вы хотите смотреть?</h2>
+      <p class="api-modal__desc">
+        Отметьте галочками категории, которые хотите видеть в каталоге и поиске:
+      </p>
+      <div class="prefs-list">
+        <label class="prefs-item">
+          <input type="checkbox" id="prefSeries" checked>
+          <span class="prefs-item__content">
+            <span class="prefs-item__icon">🎬</span>
+            <span class="prefs-item__text">
+              <strong>Сериалы</strong>
+              <small>Зарубежные и мировые художественные сериалы</small>
+            </span>
+          </span>
+        </label>
+        <label class="prefs-item">
+          <input type="checkbox" id="prefAnime" checked>
+          <span class="prefs-item__content">
+            <span class="prefs-item__icon">🇯🇵</span>
+            <span class="prefs-item__text">
+              <strong>Аниме</strong>
+              <small>Японские, китайские (дунхуа), корейские и западные аниме-сериалы (Атака титанов, Аватар: Легенда об Аанге, Кастлвания и др.)</small>
+            </span>
+          </span>
+        </label>
+        <label class="prefs-item">
+          <input type="checkbox" id="prefCartoons" checked>
+          <span class="prefs-item__content">
+            <span class="prefs-item__icon">🎨</span>
+            <span class="prefs-item__text">
+              <strong>Мультсериалы</strong>
+              <small>Западная и мировая анимация (Рик и Морти, Аркейн, Гравити Фолз и др.)</small>
+            </span>
+          </span>
+        </label>
+        <label class="prefs-item">
+          <input type="checkbox" id="prefDoramas" checked>
+          <span class="prefs-item__content">
+            <span class="prefs-item__icon">🇰🇷</span>
+            <span class="prefs-item__text">
+              <strong>Дорамы</strong>
+              <small>Корейские и азиатские драматические сериалы</small>
+            </span>
+          </span>
+        </label>
+      </div>
+      <button class="btn btn--primary" id="saveContentPrefsBtn" style="width:100%; margin-top:20px; padding:12px;">Сохранить и продолжить</button>
+    </div>
+  </div>
+
+  <!-- 3. AI Search Modal (ИИ-запрос: Gemini Flash + Web Speech API) -->
+  <div class="api-modal-overlay" id="aiModalOverlay" style="display:none;">
+    <div class="api-modal api-modal--ai">
+      <div class="api-modal__header">
+        <div class="api-modal__title-row">
+          <span class="api-modal__icon">✨</span>
+          <h2 class="api-modal__title">ИИ-Подборщик сериалов</h2>
+        </div>
+        <button class="api-modal__close-btn" id="aiModalClose" title="Закрыть">✕</button>
+      </div>
+
+      <p class="api-modal__desc">
+        Опишите своими словами, какой сериал вы ищете — сюжет, атмосферу, настроение или похожие шоу. Можно напечатать или надиктовать голосом.
+      </p>
+
+      <!-- Input box with voice button -->
+      <div class="ai-prompt-box">
+        <textarea id="aiQueryInput" class="ai-prompt-box__textarea" rows="3" placeholder="Например: Посоветуй атмосферный детектив в скандинавском стиле с неожиданной развязкой и мрачной музыкой..."></textarea>
+        <div class="ai-prompt-box__actions">
+          <button class="ai-voice-btn" id="aiVoiceBtn" type="button" title="Нажмите, чтобы надиктовать голосом">
+            <span class="ai-voice-btn__icon">🎙️</span>
+            <span class="ai-voice-btn__text">Голосовой ввод</span>
+          </button>
+          <button class="btn btn--primary" id="aiSubmitBtn" type="button">
+            <span>✨ Подобрать 5 сериалов</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Prompt Suggestion Chips -->
+      <div class="ai-suggestions">
+        <span class="ai-suggestions__label">Примеры:</span>
+        <button class="ai-chip" data-prompt="Мрачный детектив-головоломка в духе Твин Пикс, Тьмы и Настоящего детектива">🕵️ Запутанный детектив</button>
+        <button class="ai-chip" data-prompt="Уютная смешная комедия на вечер, чтобы отдохнуть после работы">🍿 Уютный ситком</button>
+        <button class="ai-chip" data-prompt="Масштабное эпическое фэнтези с магией, битвами и проработанным миром">⚔️ Эпическое фэнтези</button>
+        <button class="ai-chip" data-prompt="Напряжённый психологический триллер про игры разума и неожиданные повороты">🧠 Игры разума</button>
+        <button class="ai-chip" data-prompt="Атмосферное аниме с глубоким философским сюжетом и красивой рисовкой">🎌 Глубокое аниме</button>
+      </div>
+
+      <!-- Loading State -->
+      <div class="ai-loading" id="aiLoading" style="display:none;">
+        <div class="ai-loading__spinner"></div>
+        <div class="ai-loading__text">Gemini 3.7 Flash анализирует запрос и подбирает лучшие сериалы...</div>
+      </div>
+
+      <!-- Error State -->
+      <div class="api-modal__error" id="aiError" style="display:none;"></div>
+
+      <!-- AI Results -->
+      <div class="ai-results" id="aiResults" style="display:none;">
+        <div class="ai-results__header">
+          <h3>🎯 Рекомендации от ИИ:</h3>
+          <button class="btn btn--ghost btn--small" id="aiResetSearchBtn">Новый запрос</button>
+        </div>
+        <div class="ai-results__grid" id="aiResultsGrid">
+          <!-- 5 cards inserted dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app" id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header__inner">
+        <a class="header__logo" href="../films/index.html" title="Нажмите, чтобы открыть FilmFinder (Поиск фильмов)">
+          <span class="header__logo-icon">🎬</span>
+          <span class="header__logo-text">SerialFinder</span>
+          <span class="header__logo-switch">Фильмы →</span>
+        </a>
+        <div class="header__search-container">
+          <div class="header__search">
+            <svg class="header__search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input class="header__search-input" placeholder="Поиск сериалов, аниме, мультфильмов..." id="searchInput">
+          </div>
+          <!-- Кнопка ИИ-запрос -->
+          <button class="pill-btn pill-btn--ai" id="aiSearchBtn" title="Интеллектуальный подбор сериалов с помощью ИИ (Gemini Flash)">
+            <span class="pill-btn__icon">✨</span>
+            <span class="pill-btn__label">ИИ-запрос</span>
+          </button>
+        </div>
+        <div class="header__actions">
+          <!-- Кнопка настройки категорий -->
+          <button class="btn btn--ghost btn--icon-text" id="openContentPrefsBtn" title="Настройки категорий">
+            ⚙️ <span>Категории</span>
+          </button>
+          <button class="theme-toggle" id="themeToggle" title="Сменить тему">
+            <svg class="theme-toggle__icon theme-toggle__icon--sun" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <svg class="theme-toggle__icon theme-toggle__icon--moon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Mobile sidebar toggle -->
+    <button class="sidebar__toggle" id="sidebarToggle">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+      Фильтры
+    </button>
+    <div class="sidebar__overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar with filters -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar__header">
+        <h2>
+          <span class="sidebar__header-icon">⚙️</span>
+          <span>Фильтры</span>
+        </h2>
+        <div class="sidebar__actions">
+          <button class="btn btn--ghost btn--small" id="resetFilters" title="Сбросить все фильтры">Сбросить</button>
+          <button class="btn btn--primary btn--small" id="applyFiltersBtn" title="Применить выбранные фильтры">Найти</button>
+        </div>
+      </div>
+      <div class="sidebar__content">
+        <!-- Рейтинг -->
+        <div class="filter-group">
+          <div class="filter-group__title">
+            Минимальный рейтинг
+            <svg class="filter-group__title-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+          <div class="filter-group__content">
+            <div class="range-slider">
+              <div class="range-slider__labels">
+                <span class="range-slider__tag">Рейтинг от:</span>
+                <div class="manual-input-wrapper">
+                  <input type="number" class="manual-input" id="minRatingManual" min="0" max="10" step="0.1" value="0.0">
+                  <span class="manual-input__suffix">★</span>
+                </div>
+              </div>
+              <input type="range" class="range-slider__input" id="minRatingInput" min="0" max="10" step="0.5" value="0">
+            </div>
+          </div>
+        </div>
+
+        <!-- Год -->
+        <div class="filter-group">
+          <div class="filter-group__title">
+            Год выхода
+            <svg class="filter-group__title-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+          <div class="filter-group__content">
+            <div class="range-slider">
+              <div class="range-slider__labels">
+                <span class="range-slider__tag">Период:</span>
+                <div class="manual-input-range">
+                  <input type="number" class="manual-input manual-input--year" id="yearFromManual" min="1950" max="2030" value="1950">
+                  <span class="manual-input__sep">—</span>
+                  <input type="number" class="manual-input manual-input--year" id="yearToManual" min="1950" max="2030" value="2026">
+                </div>
+              </div>
+              <div class="range-slider__dual">
+                <input type="range" class="range-slider__input" id="yearFromInput" min="1950" max="2026" value="1950">
+                <input type="range" class="range-slider__input" id="yearToInput" min="1950" max="2026" value="2026">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Статус -->
+        <div class="filter-group">
+          <div class="filter-group__title">
+            Статус сериала
+            <svg class="filter-group__title-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+          <div class="filter-group__content">
+            <div class="radio-group">
+              <label class="radio-item">
+                <input type="radio" name="status" value="all" checked>
+                <span>Все</span>
+              </label>
+              <label class="radio-item">
+                <input type="radio" name="status" value="ended">
+                <span>Завершён</span>
+              </label>
+              <label class="radio-item">
+                <input type="radio" name="status" value="running">
+                <span>Выходит</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Минимум сезонов -->
+        <div class="filter-group">
+          <div class="filter-group__title">
+            Минимум сезонов
+            <svg class="filter-group__title-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+          <div class="filter-group__content">
+            <div class="range-slider">
+              <div class="range-slider__labels">
+                <span class="range-slider__tag">Сезонов от:</span>
+                <div class="manual-input-wrapper">
+                  <input type="number" class="manual-input" id="minSeasonsManual" min="1" max="10" step="1" value="1">
+                </div>
+              </div>
+              <input type="range" class="range-slider__input" id="minSeasonsInput" min="1" max="10" value="1">
+            </div>
+          </div>
+        </div>
+
+        <!-- Жанры -->
+        <div class="filter-group" id="filter-genres-group">
+          <div class="filter-group__title">
+            Жанры
+            <svg class="filter-group__title-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+          <div class="filter-group__content">
+            <div class="filter-search">
+              <svg class="filter-search__icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" class="filter-search__input" id="genresSearchInput" placeholder="Быстрый поиск жанра...">
+            </div>
+            <div class="checkbox-group scrollable-list" id="genresFilter">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Страна производства -->
+        <div class="filter-group" id="filter-include-countries-group">
+          <div class="filter-group__title">
+            Страна производства
+            <svg class="filter-group__title-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+          <div class="filter-group__content">
+            <div class="filter-search">
+              <svg class="filter-search__icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" class="filter-search__input" id="includeCountriesSearchInput" placeholder="Быстрый поиск страны...">
+            </div>
+            <div class="checkbox-group scrollable-list" id="countriesIncludeFilter">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Исключить страны -->
+        <div class="filter-group" id="filter-countries-group">
+          <div class="filter-group__title">
+            Исключить страны
+            <svg class="filter-group__title-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+          <div class="filter-group__content">
+            <div class="filter-search">
+              <svg class="filter-search__icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" class="filter-search__input" id="excludeCountriesSearchInput" placeholder="Быстрый поиск страны...">
+            </div>
+            <div class="checkbox-group scrollable-list" id="countriesExcludeFilter">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Настройки -->
+        <div class="filter-group filter-group--settings">
+          <div class="filter-group__title">
+            Настройки
+            <svg class="filter-group__title-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+          <div class="filter-group__content settings-group__content">
+            <button class="pill-btn pill-btn--sidebar" id="sidebarContentPrefsBtn" title="Настроить отображаемые категории">
+              <span class="pill-btn__icon">⚙️</span>
+              <span class="pill-btn__label">Настройка категорий</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main-content">
+      <!-- Top Category & Quick Action Bar (Full Width Unified Pill Design) -->
+      <div class="category-bar">
+        <nav class="category-nav" id="categoryNav">
+          <button class="pill-btn category-nav__item category-nav__item--active" data-category="series">
+            <span class="pill-btn__icon">🎬</span>
+            <span class="pill-btn__label">Сериалы</span>
+          </button>
+          <button class="pill-btn category-nav__item" data-category="anime">
+            <span class="pill-btn__icon">🇯🇵</span>
+            <span class="pill-btn__label">Аниме</span>
+          </button>
+          <button class="pill-btn category-nav__item" data-category="cartoons">
+            <span class="pill-btn__icon">🎨</span>
+            <span class="pill-btn__label">Мультсериалы</span>
+          </button>
+          <button class="pill-btn category-nav__item" data-category="doramas">
+            <span class="pill-btn__icon">🇰🇷</span>
+            <span class="pill-btn__label">Дорамы</span>
+          </button>
+        </nav>
+
+        <button class="pill-btn pill-btn--random random-btn" id="randomSeriesBtn" title="Подобрать случайный сериал">
+          <span class="pill-btn__icon">🎲</span>
+          <span class="pill-btn__label">Случайный сериал</span>
+        </button>
+      </div>
+
+      <!-- Featured: Популярное / Новинки -->
+      <section class="featured" id="featuredSection" style="display:none;">
+        <div class="featured__header">
+          <div class="featured__tabs" id="featuredTabs">
+            <button class="featured__tab featured__tab--active" data-tab="popular">Популярное</button>
+            <button class="featured__tab" data-tab="new">Новинки</button>
+          </div>
+          <div class="featured__subtabs" id="featuredSubtabs" style="display:none;">
+            <button class="featured__subtab featured__subtab--active" data-subtab="upcoming">Скоро / Недавно</button>
+            <button class="featured__subtab" data-subtab="released">Вышедшие сезоны</button>
+          </div>
+        </div>
+        <div class="featured__carousel-wrap">
+          <button class="featured__arrow featured__arrow--left" id="featuredArrowLeft" aria-label="Назад">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <div class="featured__carousel" id="featuredCarousel">
+            <!-- Cards loaded dynamically -->
+          </div>
+          <button class="featured__arrow featured__arrow--right" id="featuredArrowRight" aria-label="Вперёд">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+          <div class="featured__loading" id="featuredLoading" style="display:none;">
+            <div class="loading-spinner__ring"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Results Bar -->
+      <div class="results-bar">
+        <span class="results-bar__count" id="resultsCount">Загрузка...</span>
+        <div class="results-bar__sort">
+          <label>Сортировка:</label>
+          <div class="select-dropdown">
+            <select class="results-bar__sort-select" id="sortSelect">
+              <option value="popularity-desc">По популярности</option>
+              <option value="rating-desc">По рейтингу ↓</option>
+              <option value="rating-asc">По рейтингу ↑</option>
+              <option value="year-desc">По году ↓ (новые)</option>
+              <option value="year-asc">По году ↑ (старые)</option>
+              <option value="title-asc">По алфавиту А-Я</option>
+              <option value="title-desc">По алфавиту Я-А</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading spinner -->
+      <div class="loading-spinner" id="loadingSpinner" style="display:none;">
+        <div class="loading-spinner__ring"></div>
+        <span class="loading-spinner__text">Загрузка сериалов...</span>
+      </div>
+
+      <div class="series-grid" id="seriesGrid"></div>
+
+      <div class="no-results" id="noResults" style="display:none;">
+        <div class="no-results__icon">🔍</div>
+        <div class="no-results__text">Сериалы не найдены. Попробуйте изменить фильтры.</div>
+      </div>
+
+      <!-- Load more button -->
+      <div class="load-more" id="loadMoreContainer" style="display:none;">
+        <button class="btn btn--secondary load-more__btn" id="loadMoreBtn">
+          Показать ещё
+        </button>
+        <span class="load-more__info" id="loadMoreInfo"></span>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal Details -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="modal">
+      <button class="modal__close" id="modalClose">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+      <div class="modal__body" id="modalBody">
+        <!-- Filled dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="api.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
