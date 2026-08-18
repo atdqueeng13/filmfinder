@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CinemaFinder — Сериалы и Фильмы Онлайн</title>
-  <meta name="description" content="Удобный поиск и фильтрация лучших сериалов и фильмов. База из 170 000+ тайтлов с рейтингами IMDb, Кинопоиск и поиском через ИИ.">
+  <title>SerialFinder — Поиск сериалов, аниме и дорам</title>
+  <meta name="description" content="Удобный поиск и фильтрация лучших сериалов, аниме, мультсериалов и дорам. База из 170 000+ сериалов с рейтингами IMDb, Кинопоиск и подбором через ИИ.">
   <meta http-equiv="refresh" content="0; url=./serials/index.html">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -35,7 +35,7 @@
       border: 1px solid var(--border);
       border-radius: 24px;
       padding: 40px 32px;
-      max-width: 480px;
+      max-width: 440px;
       width: 100%;
       text-align: center;
       box-shadow: 0 20px 50px rgba(0,0,0,0.5);
@@ -56,11 +56,6 @@
       line-height: 1.5;
       margin-bottom: 28px;
     }
-    .portal__links {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
     .portal__btn {
       display: flex;
       align-items: center;
@@ -71,23 +66,12 @@
       text-decoration: none;
       font-weight: 600;
       font-size: 1rem;
-      transition: all 0.2s ease;
-    }
-    .portal__btn--primary {
       background: var(--accent);
       color: #0b0f19;
+      transition: all 0.2s ease;
     }
-    .portal__btn--primary:hover {
+    .portal__btn:hover {
       background: hsl(38, 92%, 60%);
-      transform: translateY(-2px);
-    }
-    .portal__btn--secondary {
-      background: hsl(225, 18%, 15%);
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-    .portal__btn--secondary:hover {
-      background: hsl(225, 18%, 20%);
       transform: translateY(-2px);
     }
     .portal__spinner {
@@ -112,30 +96,23 @@
     }
   </style>
   <script>
-    // Мгновенный переход в раздел сериалов
     window.location.replace('./serials/index.html');
   </script>
 </head>
 <body>
   <div class="portal">
     <div class="portal__logo">🎬</div>
-    <h1 class="portal__title">CinemaFinder</h1>
-    <p class="portal__desc">Умный поиск фильмов и сериалов с рейтингами Кинопоиска, IMDb и рекомендациями от ИИ.</p>
+    <h1 class="portal__title">SerialFinder</h1>
+    <p class="portal__desc">Умный поиск сериалов, аниме, мультсериалов и дорам с рейтингами Кинопоиска, IMDb и рекомендациями от ИИ.</p>
     
-    <div class="portal__links">
-      <a href="./serials/index.html" class="portal__btn portal__btn--primary">
-        <span>📺</span>
-        <span>Открыть Сериалы (SerialFinder)</span>
-      </a>
-      <a href="./films/index.html" class="portal__btn portal__btn--secondary">
-        <span>🍿</span>
-        <span>Открыть Фильмы (FilmFinder)</span>
-      </a>
-    </div>
+    <a href="./serials/index.html" class="portal__btn">
+      <span>📺</span>
+      <span>Открыть SerialFinder</span>
+    </a>
 
     <div class="portal__spinner">
       <div class="spinner-dot"></div>
-      <span>Перенаправление...</span>
+      <span>Загрузка...</span>
     </div>
   </div>
 </body>
