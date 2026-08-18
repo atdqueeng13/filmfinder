@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CinemaFinder — Сериалы и Фильмы Онлайн</title>
+  <meta name="description" content="Удобный поиск и фильтрация лучших сериалов и фильмов. База из 170 000+ тайтлов с рейтингами IMDb, Кинопоиск и поиском через ИИ.">
+  <meta http-equiv="refresh" content="0; url=./serials/index.html">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: hsl(225, 25%, 7%);
+      --card-bg: hsl(225, 20%, 11%);
+      --accent: hsl(38, 92%, 50%);
+      --text: hsl(220, 15%, 93%);
+      --text-muted: hsl(220, 10%, 60%);
+      --border: hsl(225, 15%, 18%);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .portal {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 40px 32px;
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    }
+    .portal__logo {
+      font-size: 3rem;
+      margin-bottom: 12px;
+    }
+    .portal__title {
+      font-size: 1.8rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+    .portal__desc {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+      margin-bottom: 28px;
+    }
+    .portal__links {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .portal__btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 14px 20px;
+      border-radius: 14px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: all 0.2s ease;
+    }
+    .portal__btn--primary {
+      background: var(--accent);
+      color: #0b0f19;
+    }
+    .portal__btn--primary:hover {
+      background: hsl(38, 92%, 60%);
+      transform: translateY(-2px);
+    }
+    .portal__btn--secondary {
+      background: hsl(225, 18%, 15%);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .portal__btn--secondary:hover {
+      background: hsl(225, 18%, 20%);
+      transform: translateY(-2px);
+    }
+    .portal__spinner {
+      margin-top: 24px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .spinner-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 1s infinite alternate;
+    }
+    @keyframes pulse {
+      from { opacity: 0.3; transform: scale(0.8); }
+      to { opacity: 1; transform: scale(1.2); }
+    }
+  </style>
+  <script>
+    // Мгновенный переход в раздел сериалов
+    window.location.replace('./serials/index.html');
+  </script>
+</head>
+<body>
+  <div class="portal">
+    <div class="portal__logo">🎬</div>
+    <h1 class="portal__title">CinemaFinder</h1>
+    <p class="portal__desc">Умный поиск фильмов и сериалов с рейтингами Кинопоиска, IMDb и рекомендациями от ИИ.</p>
+    
+    <div class="portal__links">
+      <a href="./serials/index.html" class="portal__btn portal__btn--primary">
+        <span>📺</span>
+        <span>Открыть Сериалы (SerialFinder)</span>
+      </a>
+      <a href="./films/index.html" class="portal__btn portal__btn--secondary">
+        <span>🍿</span>
+        <span>Открыть Фильмы (FilmFinder)</span>
+      </a>
+    </div>
+
+    <div class="portal__spinner">
+      <div class="spinner-dot"></div>
+      <span>Перенаправление...</span>
+    </div>
+  </div>
+</body>
+</html>
