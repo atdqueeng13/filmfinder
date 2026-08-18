@@ -136,6 +136,11 @@
           <span class="header__logo-text">SerialFinder</span>
         </a>
         <div class="header__search-container">
+          <!-- Кнопка AI Advice (слева) -->
+          <button class="pill-btn pill-btn--feature pill-btn--ai" id="aiSearchBtn" title="AI Advice — интеллектуальный подбор сериалов с помощью ИИ">
+            <span class="pill-btn__icon">✨</span>
+            <span class="pill-btn__label">AI Advice</span>
+          </button>
           <div class="header__search">
             <svg class="header__search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="11" cy="11" r="8"></circle>
@@ -143,22 +148,13 @@
             </svg>
             <input class="header__search-input" placeholder="Поиск сериалов, аниме, мультфильмов..." id="searchInput">
           </div>
-          <!-- Кнопка ИИ-запрос -->
-          <button class="pill-btn pill-btn--ai" id="aiSearchBtn" title="Интеллектуальный подбор сериалов с помощью ИИ (Gemini Flash)">
-            <span class="pill-btn__icon">✨</span>
-            <span class="pill-btn__label">ИИ-запрос</span>
-          </button>
-          <!-- Кнопка Swipe Check -->
-          <button class="pill-btn pill-btn--swipe" id="swipeCheckBtn" title="Swipe Check — поиск сериалов по вайбу">
+          <!-- Кнопка Vibe Check (справа) -->
+          <button class="pill-btn pill-btn--feature pill-btn--vibe" id="swipeCheckBtn" title="Vibe Check — поиск сериалов по вайбу">
             <span class="pill-btn__icon">🔥</span>
-            <span class="pill-btn__label">Swipe Check</span>
+            <span class="pill-btn__label">Vibe Check</span>
           </button>
         </div>
         <div class="header__actions">
-          <!-- Кнопка настройки категорий -->
-          <button class="btn btn--ghost btn--icon-text" id="openContentPrefsBtn" title="Настройки категорий">
-            ⚙️ <span>Категории</span>
-          </button>
           <button class="theme-toggle" id="themeToggle" title="Сменить тему">
             <svg class="theme-toggle__icon theme-toggle__icon--sun" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
               <circle cx="12" cy="12" r="5"></circle>
@@ -459,7 +455,7 @@
       <div class="swipe-modal__header">
         <div class="swipe-modal__badge">
           <span class="swipe-modal__badge-icon">🔥</span>
-          <span class="swipe-modal__badge-text">Swipe Check</span>
+          <span class="swipe-modal__badge-text">Vibe Check</span>
         </div>
         <div class="swipe-modal__stats" id="swipeVibeStatus">Поиск по вайбу</div>
         <div class="swipe-modal__actions">

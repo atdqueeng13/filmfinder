@@ -258,29 +258,65 @@ If they are direct children of .app, we can use CSS Grid or just flex row after 
   height: 16px;
 }
 
-.pill-btn--ai {
-  background: linear-gradient(135deg, hsla(38, 92%, 50%, 0.15) 0%, hsla(280, 80%, 55%, 0.15) 100%);
-  border: 1px solid hsla(38, 92%, 50%, 0.4);
-  color: var(--text-primary);
-  box-shadow: 0 2px 10px hsla(38, 92%, 50%, 0.15);
-  padding: 6px 14px;
-  height: 38px;
-  flex-shrink: 0;
+.header__search-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.pill-btn--feature {
+  height: 42px;
+  padding: 0 18px;
+  border-radius: 9999px;
+  font-size: 0.875rem;
   font-weight: 600;
-  font-size: 0.8125rem;
-  cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  border-radius: 9999px;
-  transition: all 0.25s ease;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.pill-btn--feature:hover {
+  transform: translateY(-2px);
+}
+
+.pill-btn--feature:active {
+  transform: translateY(0);
+}
+
+.pill-btn--ai {
+  background: linear-gradient(135deg, hsla(265, 85%, 55%, 0.2) 0%, hsla(38, 92%, 50%, 0.2) 100%);
+  border: 1px solid hsla(265, 80%, 65%, 0.4);
+  color: var(--text-primary);
+  box-shadow: 0 3px 12px hsla(265, 85%, 55%, 0.18);
 }
 
 .pill-btn--ai:hover {
-  background: linear-gradient(135deg, hsla(38, 92%, 50%, 0.28) 0%, hsla(280, 80%, 55%, 0.28) 100%);
-  border-color: var(--accent);
-  box-shadow: 0 4px 16px hsla(38, 92%, 50%, 0.35);
-  transform: translateY(-1px);
+  background: linear-gradient(135deg, hsla(265, 85%, 58%, 0.35) 0%, hsla(38, 92%, 50%, 0.35) 100%);
+  border-color: hsla(265, 85%, 70%, 0.7);
+  box-shadow: 0 6px 20px hsla(265, 85%, 55%, 0.35);
+}
+
+.pill-btn--vibe {
+  background: linear-gradient(135deg, hsla(18, 95%, 52%, 0.25) 0%, hsla(38, 92%, 50%, 0.25) 100%);
+  border: 1px solid hsla(18, 95%, 52%, 0.45);
+  color: var(--text-primary);
+  box-shadow: 0 3px 12px hsla(18, 95%, 52%, 0.2);
+}
+
+.pill-btn--vibe:hover {
+  background: linear-gradient(135deg, hsla(18, 95%, 55%, 0.4) 0%, hsla(38, 92%, 50%, 0.4) 100%);
+  border-color: hsl(18, 95%, 60%);
+  box-shadow: 0 6px 20px hsla(18, 95%, 52%, 0.4);
 }
 
 .header__actions {
@@ -2249,22 +2285,30 @@ If they are direct children of .app, we can use CSS Grid or just flex row after 
     width: 100%;
     max-width: 100%;
     order: 3;
+    display: flex;
+    flex-wrap: wrap;
     gap: 8px;
-    margin-top: 2px;
+    margin-top: 4px;
+  }
+
+  .header__search {
+    width: 100%;
+    order: 1;
   }
 
   .header__search-input {
-    height: 38px;
+    height: 40px;
     font-size: 0.8125rem;
     padding: 6px 12px 6px 36px;
   }
 
-  .pill-btn--ai {
+  .pill-btn--feature {
+    flex: 1 1 calc(50% - 4px);
     height: 38px;
-    padding: 4px 12px;
-    font-size: 0.75rem;
+    padding: 4px 10px;
+    font-size: 0.78125rem;
     white-space: nowrap;
-    flex-shrink: 0;
+    order: 2;
   }
 
   .sidebar {
