@@ -1394,9 +1394,10 @@ function startApp() {
             }
 
             const nextBatch = resultsBuffer.splice(0, takeCount);
+            const prevCount = allLoadedResults.length;
             allLoadedResults.push(...nextBatch);
 
-            renderCards(allLoadedResults);
+            renderCards(allLoadedResults, isReset ? 0 : prevCount);
             updateResultsCount(allLoadedResults.length);
             updateLoadMore();
 
@@ -1532,7 +1533,7 @@ function startApp() {
     }
 
     // ==================== РЕНДЕРИНГ КАРТОЧЕК ====================
-    function renderCards(data) {
+    function renderCards(data, appendFrom = 0) {
         currentResults = data;
         const count = data.length;
 
@@ -1544,8 +1545,20 @@ function startApp() {
 
         el.noResults.style.display = 'none';
 
-        el.seriesGrid.innerHTML = data.map((series, index) => {
-            const delay = Math.min(index * 0.03, 0.6);
+        // Определяем, какой срез данных рендерить
+        const sliceStart = appendFrom > 0 ? appendFrom : 0;
+        const itemsToRender = data.slice(sliceStart);
+
+        // Если это полный сброс (appendFrom === 0), очищаем грид
+        if (appendFrom === 0) {
+            el.seriesGrid.innerHTML = '';
+        }
+
+        const fragment = document.createDocumentFragment();
+
+        itemsToRender.forEach((series, i) => {
+            const index = sliceStart + i;
+            const delay = appendFrom > 0 ? Math.min(i * 0.03, 0.6) : Math.min(index * 0.03, 0.6);
             const rating = series.avgRating || 0;
             const ratingClass = rating >= 8 ? 'rating--high' : rating >= 6 ? 'rating--mid' : 'rating--low';
             const displayTitle = series.titleRu || series.title;
@@ -1564,35 +1577,37 @@ function startApp() {
                 statusBadgeHtml = `<div class="series-card__status-badge">Выходит</div>`;
             }
 
-            return `
-                <article class="series-card fade-in" style="animation-delay:${delay}s" data-id="${series.id}">
-                    <div class="series-card__poster">
-                        <img src="${series.poster || ''}" alt="${displayTitle}" class="series-card__poster-img" loading="lazy"
-                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
-                        <div class="series-card__poster-fallback" style="display:none;">${displayTitle.charAt(0).toUpperCase()}</div>
-                        <div class="series-card__rating-badge ${ratingClass}">
-                            ★ ${rating.toFixed(1)}
-                        </div>
-                        ${statusBadgeHtml}
+            const article = document.createElement('article');
+            article.className = 'series-card fade-in';
+            article.style.animationDelay = `${delay}s`;
+            article.dataset.id = series.id;
+            article.innerHTML = `
+                <div class="series-card__poster">
+                    <img src="${series.poster || ''}" alt="${displayTitle}" class="series-card__poster-img" loading="lazy"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                    <div class="series-card__poster-fallback" style="display:none;">${displayTitle.charAt(0).toUpperCase()}</div>
+                    <div class="series-card__rating-badge ${ratingClass}">
+                        ★ ${rating.toFixed(1)}
                     </div>
-                    <div class="series-card__info">
-                        <h3 class="series-card__title" title="${displayTitle}">${displayTitle}</h3>
-                        <div class="series-card__meta">
-                            <span>${yearStr}</span>
-                            ${seasonsStr ? `<span>•</span><span>${seasonsStr}</span>` : ''}
-                        </div>
-                        <div class="series-card__genres">
-                            ${genres.slice(0, 3).map(g => `<span class="series-card__genre-tag">${g}</span>`).join('')}
-                        </div>
+                    ${statusBadgeHtml}
+                </div>
+                <div class="series-card__info">
+                    <h3 class="series-card__title" title="${displayTitle}">${displayTitle}</h3>
+                    <div class="series-card__meta">
+                        <span>${yearStr}</span>
+                        ${seasonsStr ? `<span>•</span><span>${seasonsStr}</span>` : ''}
                     </div>
-                </article>
+                    <div class="series-card__genres">
+                        ${genres.slice(0, 3).map(g => `<span class="series-card__genre-tag">${g}</span>`).join('')}
+                    </div>
+                </div>
             `;
-        }).join('');
 
-        // Клик по карточке
-        document.querySelectorAll('.series-card').forEach(card => {
-            card.addEventListener('click', () => openModal(card.getAttribute('data-id')));
+            article.addEventListener('click', () => openModal(String(series.id)));
+            fragment.appendChild(article);
         });
+
+        el.seriesGrid.appendChild(fragment);
     }
 
     // ==================== ПОПУЛЯРНОЕ / НОВИНКИ ====================
