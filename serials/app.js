@@ -2014,8 +2014,12 @@ function startApp() {
         deck: [],
         seenIds: new Set(),
         likedList: [],
+        dislikedList: [],
         genreWeights: {},
+        countryWeights: {},
+        dislikedGenresCount: {},
         likedSeriesQueue: [],
+        randomPagesPool: [],
         isFetching: false,
         isAnimating: false,
         page: 1,
@@ -2253,32 +2257,126 @@ function startApp() {
 
         // Обновляем веса и алгоритм
         if (direction === 'right') {
-            // 👍 ЛАЙК: повышаем веса всех жанров
+            // 👍 ЛАЙК: усиливаем веса всех жанров и страны
             (currentShow.genres || []).forEach(g => {
-                swipeState.genreWeights[g] = (swipeState.genreWeights[g] || 0) + 3.0;
+                swipeState.genreWeights[g] = (swipeState.genreWeights[g] || 0) + 4.0;
+                if (swipeState.dislikedGenresCount[g]) {
+                    swipeState.dislikedGenresCount[g] = Math.max(0, swipeState.dislikedGenresCount[g] - 1);
+                }
             });
             if (currentShow.country) {
-                swipeState.genreWeights[currentShow.country] = (swipeState.genreWeights[currentShow.country] || 0) + 1.5;
+                swipeState.countryWeights[currentShow.country] = (swipeState.countryWeights[currentShow.country] || 0) + 2.0;
             }
 
             swipeState.likedList.push(currentShow);
             swipeState.likedSeriesQueue.push(currentShow.id);
             updateSwipeLikesUI();
             updateSwipeVibeStatus();
+
+            // Мгновенно запрашиваем рекомендации от TMDB для этого лайкнутого сериала
+            fetchRecommendationsForLiked(currentShow.id);
         } else {
-            // 👎 ДИЗЛАЙК: снижаем веса жанров
+            // 👎 ДИЗЛАЙК: штрафуем жанры и характеристики
             (currentShow.genres || []).forEach(g => {
-                swipeState.genreWeights[g] = (swipeState.genreWeights[g] || 0) - 1.2;
+                swipeState.genreWeights[g] = (swipeState.genreWeights[g] || 0) - 2.5;
+                swipeState.dislikedGenresCount[g] = (swipeState.dislikedGenresCount[g] || 0) + 1;
             });
+            swipeState.dislikedList.push(currentShow);
         }
 
         swipeState.seenIds.add(currentShow.id);
         swipeState.deck.shift();
 
+        // МГНОВЕННЫЙ ПЕРЕСЧЕТ: следующая карточка на руках сразу подстраивается под выбор
+        reScoreAndSortDeck();
+        preloadUpcomingPosters();
+
         setTimeout(() => {
             swipeState.isAnimating = false;
             renderSwipeDeck();
         }, 320);
+    }
+
+    function reScoreAndSortDeck() {
+        if (swipeState.deck.length === 0) return;
+
+        // Пересчитываем оценку каждого кандидата в колоде
+        swipeState.deck.forEach(show => {
+            show._vibeScore = calculateVibeScore(show);
+        });
+
+        // Отсекаем тайтлы с сильно отрицательным рейтингом (настойчиво отвергнутые жанры)
+        swipeState.deck = swipeState.deck.filter(show => (show._vibeScore || 0) >= -7.0);
+
+        // Сортируем: сверху оказывается самый релевантный сериал!
+        swipeState.deck.sort((a, b) => (b._vibeScore || 0) - (a._vibeScore || 0));
+    }
+
+    function calculateVibeScore(show) {
+        let score = (show.avgRating || show.vote_average || 7.0) * 0.4;
+        const genres = show.genres || [];
+
+        genres.forEach(g => {
+            if (swipeState.genreWeights[g]) {
+                score += swipeState.genreWeights[g];
+            }
+            if (swipeState.dislikedGenresCount[g] && swipeState.dislikedGenresCount[g] >= 2) {
+                // Серьёзный штраф за многократный отказ от жанра
+                score -= swipeState.dislikedGenresCount[g] * 3.5;
+            }
+        });
+
+        if (show.country && swipeState.countryWeights[show.country]) {
+            score += swipeState.countryWeights[show.country];
+        }
+
+        return score;
+    }
+
+    async function fetchRecommendationsForLiked(showId) {
+        if (!isAPIMode) return;
+        try {
+            const category = swipeState.vibeCategory;
+            const [recs, sim] = await Promise.all([
+                TMDB.getRecommendations(showId).catch(() => ({ results: [] })),
+                TMDB.getSimilar(showId).catch(() => ({ results: [] }))
+            ]);
+
+            const raw = [...(recs.results || []), ...(sim.results || [])];
+            const mapped = raw.map(r => TMDB.mapShow(r, genreMap));
+            const existingIds = new Set(swipeState.deck.map(s => s.id));
+
+            let added = false;
+            mapped.forEach(show => {
+                const poster = show.poster || (show.poster_path ? TMDB.posterUrl(show.poster_path) : '');
+                if (show && poster && !swipeState.seenIds.has(show.id) && !existingIds.has(show.id)) {
+                    if (matchesVibeCategory(show, category)) {
+                        show.poster = poster;
+                        show._vibeScore = calculateVibeScore(show) + 4.5; // Приоритет прямому совпадению с лайком
+                        swipeState.deck.push(show);
+                        existingIds.add(show.id);
+                        added = true;
+                    }
+                }
+            });
+
+            if (added) {
+                reScoreAndSortDeck();
+                preloadUpcomingPosters();
+            }
+        } catch (e) {
+            console.warn('Ошибка фоновых рекомендаций для лайка:', e);
+        }
+    }
+
+    function preloadUpcomingPosters() {
+        const nextShows = swipeState.deck.slice(0, 3);
+        nextShows.forEach(s => {
+            if (s && s.poster) {
+                const img = new Image();
+                img.src = s.poster;
+            }
+        });
     }
 
     function renderSwipeLikesList() {
@@ -2348,12 +2446,15 @@ function startApp() {
         if (el.swipeModalOverlay) el.swipeModalOverlay.style.display = 'none';
         if (el.swipeLikesDrawer) el.swipeLikesDrawer.style.display = 'none';
         document.body.style.overflow = '';
-        // Сбрасываем категорию, чтобы при следующем открытии пользователь выбирал заново
+        // Сбрасываем сессию
         swipeState.vibeCategory = null;
         swipeState.vibeStartShow = null;
         swipeState.deck = [];
         swipeState.seenIds = new Set();
         swipeState.genreWeights = {};
+        swipeState.countryWeights = {};
+        swipeState.dislikedGenresCount = {};
+        swipeState.dislikedList = [];
         swipeState.likedSeriesQueue = [];
     }
 
@@ -2432,15 +2533,30 @@ function startApp() {
         });
     }
 
+    function createShuffledPagesPool(maxPage = 35) {
+        const pool = [];
+        for (let i = 1; i <= maxPage; i++) pool.push(i);
+        // Shuffle (Fisher-Yates)
+        for (let i = pool.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        return pool;
+    }
+
     function selectVibeCategory(category, startShow) {
         swipeState.vibeCategory = category;
         swipeState.vibeStartShow = startShow;
         swipeState.deck = [];
         swipeState.seenIds = new Set();
         swipeState.genreWeights = {};
+        swipeState.countryWeights = {};
+        swipeState.dislikedGenresCount = {};
+        swipeState.dislikedList = [];
         swipeState.likedList = [];
         swipeState.likedSeriesQueue = [];
         swipeState.page = 1;
+        swipeState.randomPagesPool = createShuffledPagesPool(35);
 
         updateSwipeVibeStatus();
         updateSwipeLikesUI();
@@ -2472,14 +2588,12 @@ function startApp() {
         const category = swipeState.vibeCategory;
         const startShow = swipeState.vibeStartShow;
 
-        // 1. Фильтруем все шоу по выбранной категории
+        // 1. Фильтруем все локальные шоу по выбранной категории для мгновенного старта
         let filtered = allShows.filter(s => s && s.poster && matchesVibeCategory(s, category) && !swipeState.seenIds.has(s.id));
 
         // 2. Если есть стартовый сериал — ставим его первым
         if (startShow) {
             filtered = filtered.filter(s => s.id !== startShow.id);
-
-            // Сортируем: сначала похожие на стартовый (по жанрам)
             const startGenres = new Set(startShow.genres || []);
             filtered.sort((a, b) => {
                 const aMatch = (a.genres || []).filter(g => startGenres.has(g)).length;
@@ -2487,8 +2601,6 @@ function startApp() {
                 if (bMatch !== aMatch) return bMatch - aMatch;
                 return (b.avgRating || 0) - (a.avgRating || 0);
             });
-
-            // Стартовый сериал идёт первым
             filtered.unshift(startShow);
         } else {
             filtered.sort(() => Math.random() - 0.5);
@@ -2496,56 +2608,11 @@ function startApp() {
 
         swipeState.deck = filtered;
         renderSwipeDeck();
+        preloadUpcomingPosters();
 
-        // В фоне подгружаем из TMDB
+        // В фоне мгновенно запускаем глубокую подгрузку из TMDB (170k+ база)
         if (isAPIMode) {
-            fetchTMDBShowsForCategory();
-        }
-    }
-
-    async function fetchTMDBShowsForCategory() {
-        try {
-            const category = swipeState.vibeCategory;
-            const discoverOpts = { page: 1, sort: 'popularity-desc', minRating: 6.0 };
-
-            // Настраиваем фильтры TMDB по категории
-            if (category === 'anime') {
-                discoverOpts.genreIds = [16]; // Анимация
-                discoverOpts.withOriginalLanguage = 'ja'; // Японский язык = аниме
-            } else if (category === 'cartoon') {
-                discoverOpts.genreIds = [16]; // Анимация
-                discoverOpts.withOriginalLanguage = 'en'; // Английский = западные мультсериалы
-            } else if (category === 'comedy') {
-                discoverOpts.genreIds = [35]; // Комедия
-                discoverOpts.withoutGenreIds = [16]; // Без анимации
-            } else if (category === 'serious') {
-                discoverOpts.withoutGenreIds = [16, 35]; // Без анимации и комедий
-                discoverOpts.minRating = 7.0;
-            }
-
-            const [res1, res2] = await Promise.all([
-                TMDB.discover({ ...discoverOpts, page: 1 }),
-                TMDB.discover({ ...discoverOpts, page: 2 })
-            ]);
-            const raw1 = (res1 && res1.results) || [];
-            const raw2 = (res2 && res2.results) || [];
-            const tmdbShows = [...raw1, ...raw2].map(r => TMDB.mapShow(r, genreMap));
-
-            const existingIds = new Set(swipeState.deck.map(s => s.id));
-            tmdbShows.forEach(show => {
-                if (show && show.poster && !swipeState.seenIds.has(show.id) && !existingIds.has(show.id)) {
-                    // Для аниме/мультов дополнительно проверяем через matchesVibeCategory
-                    if (matchesVibeCategory(show, category)) {
-                        show._vibeScore = calculateVibeScore(show);
-                        swipeState.deck.push(show);
-                        existingIds.add(show.id);
-                    }
-                }
-            });
-
-            sortDeckByVibe();
-        } catch (err) {
-            console.warn('Фоновая загрузка TMDB для Vibe Check:', err);
+            refillSwipeDeck();
         }
     }
 
@@ -2557,40 +2624,50 @@ function startApp() {
             let newShows = [];
             const category = swipeState.vibeCategory;
 
+            // Стратегия 1: Если есть лайки — добираем рекомендации и похожие от последнего лайка
             if (isAPIMode && swipeState.likedSeriesQueue.length > 0) {
-                const targetId = swipeState.likedSeriesQueue[swipeState.likedSeriesQueue.length - 1];
+                const recentLikedId = swipeState.likedSeriesQueue[swipeState.likedSeriesQueue.length - 1];
                 try {
-                    const recs = await TMDB.getRecommendations(targetId);
-                    if (recs && recs.results && recs.results.length > 0) {
-                        const mapped = recs.results
-                            .map(r => TMDB.mapShow(r, genreMap))
-                            .filter(s => matchesVibeCategory(s, category) && s.poster);
-                        newShows.push(...mapped);
-                    }
-                } catch(e) {}
+                    const [recs, sim] = await Promise.all([
+                        TMDB.getRecommendations(recentLikedId).catch(() => ({ results: [] })),
+                        TMDB.getSimilar(recentLikedId).catch(() => ({ results: [] }))
+                    ]);
 
-                if (newShows.length < 8) {
-                    try {
-                        const sim = await TMDB.getSimilar(targetId);
-                        if (sim && sim.results) {
-                            const mapped = sim.results
-                                .map(r => TMDB.mapShow(r, genreMap))
-                                .filter(s => matchesVibeCategory(s, category) && s.poster);
-                            newShows.push(...mapped);
-                        }
-                    } catch(e) {}
-                }
+                    const combined = [...(recs.results || []), ...(sim.results || [])];
+                    const mapped = combined
+                        .map(r => TMDB.mapShow(r, genreMap))
+                        .filter(s => matchesVibeCategory(s, category) && s.poster);
+                    newShows.push(...mapped);
+                } catch(e) {}
             }
 
-            if (isAPIMode && newShows.length < 12) {
-                swipeState.page++;
-                const topGenres = getTopVibeGenres(2);
+            // Стратегия 2: Добор по всей 170k+ библиотеке TMDB с использованием весов вкусов и случайных страниц
+            if (isAPIMode && newShows.length < 20) {
+                const topGenres = getTopVibeGenres(3);
                 const genreIds = topGenres.map(g => genreReverseMap[g]).filter(Boolean);
 
+                // Выбираем страницу из пула
+                let pageToFetch = 1;
+                if (swipeState.randomPagesPool.length > 0) {
+                    pageToFetch = swipeState.randomPagesPool.pop();
+                } else {
+                    swipeState.page++;
+                    pageToFetch = swipeState.page;
+                }
+
+                // Собираем исключаемые жанры (от которых часто отказывались)
+                const withoutGenres = [];
+                Object.entries(swipeState.dislikedGenresCount).forEach(([name, count]) => {
+                    if (count >= 2 && genreReverseMap[name]) {
+                        withoutGenres.push(genreReverseMap[name]);
+                    }
+                });
+
                 const discOptions = {
-                    page: swipeState.page,
-                    sort: 'popularity-desc',
-                    minRating: 6.0
+                    page: pageToFetch,
+                    sort: (pageToFetch % 2 === 0) ? 'popularity-desc' : 'rating-desc',
+                    minRating: 6.2,
+                    minVoteCount: 20
                 };
 
                 if (category === 'anime') {
@@ -2601,10 +2678,10 @@ function startApp() {
                     discOptions.withOriginalLanguage = 'en';
                 } else if (category === 'comedy') {
                     discOptions.genreIds = [35];
-                    discOptions.withoutGenreIds = [16];
+                    withoutGenres.push(16);
                 } else if (category === 'serious') {
-                    discOptions.withoutGenreIds = [16, 35];
-                    discOptions.minRating = 7.0;
+                    withoutGenres.push(16, 35);
+                    discOptions.minRating = 6.8;
                 }
 
                 if (genreIds.length > 0) {
@@ -2613,6 +2690,10 @@ function startApp() {
                     } else {
                         discOptions.genreIds = genreIds;
                     }
+                }
+
+                if (withoutGenres.length > 0) {
+                    discOptions.withoutGenreIds = [...new Set(withoutGenres)];
                 }
 
                 try {
@@ -2626,6 +2707,7 @@ function startApp() {
                 } catch(e) {}
             }
 
+            // Стратегия 3: Подмешивание локальных эталонов
             if (window.SERIES_DATA) {
                 newShows.push(...window.SERIES_DATA);
             }
@@ -2643,38 +2725,17 @@ function startApp() {
                 }
             });
 
-            sortDeckByVibe();
+            reScoreAndSortDeck();
+            preloadUpcomingPosters();
 
             if (swipeState.deck.length > 0 && (!swipeState.topCardEl || el.swipeDeck.children.length === 0)) {
                 renderSwipeDeck();
             }
         } catch (err) {
-            console.warn('Ошибка пополнения колоды:', err);
+            console.warn('Ошибка пополнения колоды TMDB:', err);
         } finally {
             swipeState.isFetching = false;
         }
-    }
-
-    function calculateVibeScore(show) {
-        let score = 0;
-        const genres = show.genres || [];
-        genres.forEach(g => {
-            if (swipeState.genreWeights[g]) score += swipeState.genreWeights[g];
-        });
-        if (show.country && swipeState.genreWeights[show.country]) {
-            score += swipeState.genreWeights[show.country];
-        }
-        return score;
-    }
-
-    function sortDeckByVibe() {
-        if (Object.keys(swipeState.genreWeights).length === 0) return;
-        if (swipeState.deck.length <= 2) return;
-        const topTwo = swipeState.deck.slice(0, 2);
-        const rest = swipeState.deck.slice(2);
-
-        rest.sort((a, b) => (b._vibeScore || calculateVibeScore(b)) - (a._vibeScore || calculateVibeScore(a)));
-        swipeState.deck = [...topTwo, ...rest];
     }
 
     function getTopVibeGenres(limit = 2) {
@@ -2747,7 +2808,7 @@ function startApp() {
         bindSwipePhysics(frontCard);
 
         // Если в колоде осталось мало карточек, заранее пополняем
-        if (swipeState.deck.length < 8) {
+        if (swipeState.deck.length < 10) {
             refillSwipeDeck();
         }
     }
