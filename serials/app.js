@@ -2007,40 +2007,16 @@ function startApp() {
     // === 🔥 SWIPE CHECK (VIBE MATCHER TINDER ENGINE) ===
     // ===================================================
 
-    const VIBE_SEEN_IDS_KEY = 'cinemafinder_vibe_seen_ids_v3';
-    const VIBE_SEEN_TITLES_KEY = 'cinemafinder_vibe_seen_titles_v3';
-    const VIBE_SEEN_POSTERS_KEY = 'cinemafinder_vibe_seen_posters_v3';
+    // Очищаем старые ключи постоянного хранилища (чтобы сериалы были доступны в будущих сессиях)
+    ['cinemafinder_vibe_seen_ids', 'cinemafinder_vibe_seen_ids_v2', 'cinemafinder_vibe_seen_ids_v3',
+     'cinemafinder_vibe_seen_titles_v2', 'cinemafinder_vibe_seen_titles_v3',
+     'cinemafinder_vibe_seen_posters_v2', 'cinemafinder_vibe_seen_posters_v3'].forEach(k => {
+        try { localStorage.removeItem(k); } catch(e) {}
+    });
 
     function normalizeVibeTitle(t) {
         if (!t) return '';
         return String(t).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '').trim();
-    }
-
-    function loadPersistentSet(key) {
-        try {
-            const raw = localStorage.getItem(key);
-            if (raw) {
-                const arr = JSON.parse(raw);
-                if (Array.isArray(arr)) return new Set(arr);
-            }
-        } catch(e) {}
-        return new Set();
-    }
-
-    function persistSeenData() {
-        try {
-            const ids = Array.from(swipeState.seenIds);
-            if (ids.length > 10000) ids.splice(0, ids.length - 10000);
-            localStorage.setItem(VIBE_SEEN_IDS_KEY, JSON.stringify(ids));
-
-            const titles = Array.from(swipeState.seenTitles);
-            if (titles.length > 10000) titles.splice(0, titles.length - 10000);
-            localStorage.setItem(VIBE_SEEN_TITLES_KEY, JSON.stringify(titles));
-
-            const posters = Array.from(swipeState.seenPosters);
-            if (posters.length > 10000) posters.splice(0, posters.length - 10000);
-            localStorage.setItem(VIBE_SEEN_POSTERS_KEY, JSON.stringify(posters));
-        } catch(e) {}
     }
 
     function markShowAsSeen(show) {
@@ -2061,7 +2037,6 @@ function startApp() {
             const p = String(show.poster_path).replace(/^\//, '');
             if (p) swipeState.seenPosters.add(p);
         }
-        persistSeenData();
     }
 
     function isShowAlreadySeen(show) {
@@ -2092,9 +2067,9 @@ function startApp() {
     const swipeState = {
         deck: [],
         reservePool: [],
-        seenIds: loadPersistentSet(VIBE_SEEN_IDS_KEY),
-        seenTitles: loadPersistentSet(VIBE_SEEN_TITLES_KEY),
-        seenPosters: loadPersistentSet(VIBE_SEEN_POSTERS_KEY),
+        seenIds: new Set(),
+        seenTitles: new Set(),
+        seenPosters: new Set(),
         likedList: [],
         dislikedList: [],
         genreWeights: {},
