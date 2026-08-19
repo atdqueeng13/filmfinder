@@ -2032,6 +2032,8 @@ function startApp() {
     };
 
     let isDraggingCard = false;
+    let dragHasMoved = false;
+    let lastDragEndTime = 0;
     let dragStartX = 0;
     let dragStartY = 0;
     let dragDeltaX = 0;
@@ -2044,9 +2046,18 @@ function startApp() {
         // Открытие / закрытие модала
         el.swipeCheckBtn.addEventListener('click', openSwipeModal);
         if (el.swipeModalClose) el.swipeModalClose.addEventListener('click', closeSwipeModal);
+        
+        let overlayMouseDown = false;
         if (el.swipeModalOverlay) {
+            el.swipeModalOverlay.addEventListener('mousedown', (e) => {
+                overlayMouseDown = (e.target === el.swipeModalOverlay);
+            });
             el.swipeModalOverlay.addEventListener('click', (e) => {
-                if (e.target === el.swipeModalOverlay) closeSwipeModal();
+                const justDragged = isDraggingCard || (Date.now() - lastDragEndTime < 300) || dragHasMoved;
+                if (e.target === el.swipeModalOverlay && overlayMouseDown && !justDragged) {
+                    closeSwipeModal();
+                }
+                overlayMouseDown = false;
             });
         }
 
@@ -2128,6 +2139,10 @@ function startApp() {
         dragDeltaX = clientX - dragStartX;
         dragDeltaY = clientY - dragStartY;
 
+        if (Math.abs(dragDeltaX) > 4 || Math.abs(dragDeltaY) > 4) {
+            dragHasMoved = true;
+        }
+
         if (e.cancelable && Math.abs(dragDeltaX) > 4) {
             e.preventDefault();
         }
@@ -2155,6 +2170,9 @@ function startApp() {
     function onGlobalDragEnd() {
         if (!isDraggingCard || !activeCardEl) return;
         isDraggingCard = false;
+        lastDragEndTime = Date.now();
+        setTimeout(() => { dragHasMoved = false; }, 300);
+
         const cardEl = activeCardEl;
         activeCardEl = null;
 
@@ -2185,7 +2203,9 @@ function startApp() {
         cardEl.addEventListener('mousedown', (e) => {
             if (swipeState.isAnimating || e.button !== 0) return;
             e.preventDefault();
+            e.stopPropagation();
             isDraggingCard = true;
+            dragHasMoved = false;
             activeCardEl = cardEl;
             dragStartX = e.clientX;
             dragStartY = e.clientY;
@@ -2197,6 +2217,7 @@ function startApp() {
         cardEl.addEventListener('touchstart', (e) => {
             if (swipeState.isAnimating) return;
             isDraggingCard = true;
+            dragHasMoved = false;
             activeCardEl = cardEl;
             dragStartX = e.touches[0].clientX;
             dragStartY = e.touches[0].clientY;
@@ -2393,7 +2414,7 @@ function startApp() {
             const rating = show && typeof show.avgRating === 'number' ? show.avgRating.toFixed(1) : '';
 
             tile.innerHTML = `
-                ${posterUrl ? `<img src="${posterUrl}" alt="${showTitle}" class="vibe-tile__poster" loading="eager">` : ''}
+                ${posterUrl ? `<img src="${posterUrl}" alt="${showTitle}" class="vibe-tile__poster" loading="eager" onerror="this.style.display='none';">` : ''}
                 <div class="vibe-tile__overlay"></div>
                 ${rating ? `<div class="vibe-tile__rating">⭐ ${rating}</div>` : ''}
                 <div class="vibe-tile__content">
