@@ -2007,11 +2007,18 @@ function startApp() {
     // === 🔥 SWIPE CHECK (VIBE MATCHER TINDER ENGINE) ===
     // ===================================================
 
-    const VIBE_SEEN_STORAGE_KEY = 'cinemafinder_vibe_seen_ids';
+    const VIBE_SEEN_IDS_KEY = 'cinemafinder_vibe_seen_ids_v3';
+    const VIBE_SEEN_TITLES_KEY = 'cinemafinder_vibe_seen_titles_v3';
+    const VIBE_SEEN_POSTERS_KEY = 'cinemafinder_vibe_seen_posters_v3';
 
-    function loadPersistentSeenIds() {
+    function normalizeVibeTitle(t) {
+        if (!t) return '';
+        return String(t).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '').trim();
+    }
+
+    function loadPersistentSet(key) {
         try {
-            const raw = localStorage.getItem(VIBE_SEEN_STORAGE_KEY);
+            const raw = localStorage.getItem(key);
             if (raw) {
                 const arr = JSON.parse(raw);
                 if (Array.isArray(arr)) return new Set(arr);
@@ -2020,20 +2027,74 @@ function startApp() {
         return new Set();
     }
 
-    function savePersistentSeenId(id) {
-        if (!id) return;
-        swipeState.seenIds.add(id);
+    function persistSeenData() {
         try {
-            const arr = Array.from(swipeState.seenIds);
-            if (arr.length > 8000) arr.splice(0, arr.length - 8000);
-            localStorage.setItem(VIBE_SEEN_STORAGE_KEY, JSON.stringify(arr));
+            const ids = Array.from(swipeState.seenIds);
+            if (ids.length > 10000) ids.splice(0, ids.length - 10000);
+            localStorage.setItem(VIBE_SEEN_IDS_KEY, JSON.stringify(ids));
+
+            const titles = Array.from(swipeState.seenTitles);
+            if (titles.length > 10000) titles.splice(0, titles.length - 10000);
+            localStorage.setItem(VIBE_SEEN_TITLES_KEY, JSON.stringify(titles));
+
+            const posters = Array.from(swipeState.seenPosters);
+            if (posters.length > 10000) posters.splice(0, posters.length - 10000);
+            localStorage.setItem(VIBE_SEEN_POSTERS_KEY, JSON.stringify(posters));
         } catch(e) {}
+    }
+
+    function markShowAsSeen(show) {
+        if (!show) return;
+        if (show.id !== undefined && show.id !== null) {
+            swipeState.seenIds.add(String(show.id));
+            swipeState.seenIds.add(Number(show.id));
+        }
+        if (show.title) swipeState.seenTitles.add(normalizeVibeTitle(show.title));
+        if (show.titleRu) swipeState.seenTitles.add(normalizeVibeTitle(show.titleRu));
+        if (show.name) swipeState.seenTitles.add(normalizeVibeTitle(show.name));
+        if (show.original_name) swipeState.seenTitles.add(normalizeVibeTitle(show.original_name));
+        if (show.poster) {
+            const p = String(show.poster).split('/').pop().split('?')[0];
+            if (p) swipeState.seenPosters.add(p);
+        }
+        if (show.poster_path) {
+            const p = String(show.poster_path).replace(/^\//, '');
+            if (p) swipeState.seenPosters.add(p);
+        }
+        persistSeenData();
+    }
+
+    function isShowAlreadySeen(show) {
+        if (!show) return true;
+        // 1. Проверка по ID (строка и число)
+        if (show.id !== undefined && show.id !== null) {
+            if (swipeState.seenIds.has(String(show.id)) || swipeState.seenIds.has(Number(show.id))) {
+                return true;
+            }
+        }
+        // 2. Проверка по названиям (на русском, английском, оригинальном)
+        if (show.title && swipeState.seenTitles.has(normalizeVibeTitle(show.title))) return true;
+        if (show.titleRu && swipeState.seenTitles.has(normalizeVibeTitle(show.titleRu))) return true;
+        if (show.name && swipeState.seenTitles.has(normalizeVibeTitle(show.name))) return true;
+        if (show.original_name && swipeState.seenTitles.has(normalizeVibeTitle(show.original_name))) return true;
+        // 3. Проверка по файлу постера
+        if (show.poster) {
+            const p = String(show.poster).split('/').pop().split('?')[0];
+            if (p && swipeState.seenPosters.has(p)) return true;
+        }
+        if (show.poster_path) {
+            const p = String(show.poster_path).replace(/^\//, '');
+            if (p && swipeState.seenPosters.has(p)) return true;
+        }
+        return false;
     }
 
     const swipeState = {
         deck: [],
         reservePool: [],
-        seenIds: loadPersistentSeenIds(),
+        seenIds: loadPersistentSet(VIBE_SEEN_IDS_KEY),
+        seenTitles: loadPersistentSet(VIBE_SEEN_TITLES_KEY),
+        seenPosters: loadPersistentSet(VIBE_SEEN_POSTERS_KEY),
         likedList: [],
         dislikedList: [],
         genreWeights: {},
@@ -2201,6 +2262,10 @@ function startApp() {
         const cardEl = activeCardEl;
         activeCardEl = null;
 
+        if (cardEl) {
+            cardEl.classList.remove('swipe-card--dragging');
+        }
+
         const threshold = 65;
 
         if (dragDeltaX > threshold) {
@@ -2232,6 +2297,7 @@ function startApp() {
             isDraggingCard = true;
             dragHasMoved = false;
             activeCardEl = cardEl;
+            cardEl.classList.add('swipe-card--dragging');
             dragStartX = e.clientX;
             dragStartY = e.clientY;
             dragDeltaX = 0;
@@ -2244,6 +2310,7 @@ function startApp() {
             isDraggingCard = true;
             dragHasMoved = false;
             activeCardEl = cardEl;
+            cardEl.classList.add('swipe-card--dragging');
             dragStartX = e.touches[0].clientX;
             dragStartY = e.touches[0].clientY;
             dragDeltaX = 0;
@@ -2305,8 +2372,8 @@ function startApp() {
             swipeState.dislikedList.push(currentShow);
         }
 
-        // Запоминаем ID навсегда — сериал больше никогда не попадется
-        savePersistentSeenId(currentShow.id);
+        // Запоминаем сериал навсегда (по ID, названию и постеру)
+        markShowAsSeen(currentShow);
         swipeState.deck.shift();
 
         // МГНОВЕННЫЙ ПЕРЕСЧЕТ: следующая карточка на руках сразу подстраивается под выбор
@@ -2342,7 +2409,7 @@ function startApp() {
 
             while (swipeState.reservePool.length > 0 && swipeState.deck.length + freshFromReserve.length < 18) {
                 const candidate = swipeState.reservePool.shift();
-                if (candidate && !swipeState.seenIds.has(candidate.id) && !existingIds.has(candidate.id)) {
+                if (candidate && !isShowAlreadySeen(candidate) && !existingIds.has(candidate.id)) {
                     candidate._vibeScore = calculateVibeScore(candidate);
                     if (candidate._vibeScore >= -5.0) {
                         freshFromReserve.push(candidate);
@@ -2393,7 +2460,7 @@ function startApp() {
             let added = false;
             mapped.forEach(show => {
                 const poster = show.poster || (show.poster_path ? TMDB.posterUrl(show.poster_path) : '');
-                if (show && poster && !swipeState.seenIds.has(show.id) && !existingIds.has(show.id)) {
+                if (show && poster && !isShowAlreadySeen(show) && !existingIds.has(show.id)) {
                     show.poster = poster;
                     show._vibeScore = calculateVibeScore(show) + 5.0; // Приоритет прямому совпадению с лайком
                     swipeState.deck.push(show);
@@ -2489,7 +2556,7 @@ function startApp() {
 
         const allShows = window.SERIES_DATA || [];
         // Находим сериалы, которые пользователь еще не видел
-        let candidates = allShows.filter(s => s && s.poster && !swipeState.seenIds.has(s.id));
+        let candidates = allShows.filter(s => s && s.poster && !isShowAlreadySeen(s));
         if (candidates.length === 0) {
             candidates = allShows; // fallback если пересмотрено вообще всё
         }
@@ -2500,11 +2567,12 @@ function startApp() {
 
         if (startShow) {
             startShow._vibeScore = 10.0;
+            markShowAsSeen(startShow);
             swipeState.deck.push(startShow);
 
             // Подмешиваем еще несколько разнообразных стартовых карточек
             const otherSeeds = candidates
-                .filter(s => s.id !== startShow.id && !swipeState.seenIds.has(s.id))
+                .filter(s => s.id !== startShow.id && !isShowAlreadySeen(s))
                 .sort(() => Math.random() - 0.5)
                 .slice(0, 15);
 
@@ -2612,7 +2680,7 @@ function startApp() {
 
             // Добавляем локальные сериалы, которые еще не были просмотрены
             if (window.SERIES_DATA) {
-                const freshLocal = window.SERIES_DATA.filter(s => !swipeState.seenIds.has(s.id));
+                const freshLocal = window.SERIES_DATA.filter(s => !isShowAlreadySeen(s));
                 newShows.push(...freshLocal);
             }
 
@@ -2621,7 +2689,7 @@ function startApp() {
 
             newShows.forEach(show => {
                 const poster = show.poster || (show.poster_path ? TMDB.posterUrl(show.poster_path) : '');
-                if (show && poster && !swipeState.seenIds.has(show.id)) {
+                if (show && poster && !isShowAlreadySeen(show)) {
                     show.poster = poster;
                     show._vibeScore = calculateVibeScore(show);
 
@@ -2703,6 +2771,9 @@ function startApp() {
 
         // Рендерим верхнюю карточку
         const frontItem = swipeState.deck[0];
+        if (frontItem) {
+            markShowAsSeen(frontItem);
+        }
         const frontCard = createCardElement(frontItem, true);
         el.swipeDeck.appendChild(frontCard);
         swipeState.topCardEl = frontCard;
