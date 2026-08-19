@@ -3143,38 +3143,40 @@ If they are direct children of .app, we can use CSS Grid or just flex row after 
 /* Dynamic Vibe Stamps */
 .swipe-stamp {
   position: absolute;
-  top: 40px;
-  padding: 8px 18px;
-  border-radius: 12px;
-  font-size: 1.5rem;
+  top: 44px;
+  padding: 10px 22px;
+  border-radius: 16px;
+  font-size: 1.7rem;
   font-weight: 900;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  border: 4px solid;
+  border: 3.5px solid;
   opacity: 0;
   pointer-events: none;
   z-index: 10;
-  transition: opacity 0.1s ease;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: opacity 0.12s ease;
 }
 
 .swipe-stamp--like {
-  right: 24px;
-  color: hsl(145, 80%, 48%);
-  border-color: hsl(145, 80%, 48%);
-  transform: rotate(15deg);
-  background-color: hsla(145, 80%, 48%, 0.15);
-  text-shadow: 0 0 10px hsla(145, 80%, 48%, 0.5);
-  box-shadow: 0 0 16px hsla(145, 80%, 48%, 0.3);
+  right: 22px;
+  color: #22c55e;
+  border-color: #22c55e;
+  transform: rotate(14deg);
+  background-color: rgba(0, 0, 0, 0.65);
+  text-shadow: 0 0 14px rgba(34, 197, 94, 0.95);
+  box-shadow: 0 0 24px rgba(34, 197, 94, 0.65), inset 0 0 14px rgba(34, 197, 94, 0.3);
 }
 
 .swipe-stamp--nope {
-  left: 24px;
-  color: hsl(355, 85%, 58%);
-  border-color: hsl(355, 85%, 58%);
-  transform: rotate(-15deg);
-  background-color: hsla(355, 85%, 58%, 0.15);
-  text-shadow: 0 0 10px hsla(355, 85%, 58%, 0.5);
-  box-shadow: 0 0 16px hsla(355, 85%, 58%, 0.3);
+  left: 22px;
+  color: #ef4444;
+  border-color: #ef4444;
+  transform: rotate(-14deg);
+  background-color: rgba(0, 0, 0, 0.65);
+  text-shadow: 0 0 14px rgba(239, 68, 68, 0.95);
+  box-shadow: 0 0 24px rgba(239, 68, 68, 0.65), inset 0 0 14px rgba(239, 68, 68, 0.3);
 }
 
 /* Card Info Overlay */
@@ -3241,8 +3243,8 @@ If they are direct children of .app, we can use CSS Grid or just flex row after 
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 20px;
-  padding: 4px 18px 12px 18px;
+  gap: 22px;
+  padding: 6px 18px 14px 18px;
   z-index: 10;
 }
 
@@ -3252,49 +3254,56 @@ If they are direct children of .app, we can use CSS Grid or just flex row after 
   justify-content: center;
   border-radius: 50%;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  border: 1px solid var(--border);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 2px solid var(--border);
 }
 
 .swipe-btn--dislike {
-  width: 58px;
-  height: 58px;
-  background-color: var(--bg-tertiary);
-  color: hsl(355, 85%, 60%);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  width: 64px;
+  height: 64px;
+  background: radial-gradient(circle at 35% 35%, hsla(355, 85%, 55%, 0.2), var(--bg-tertiary) 80%);
+  border: 2px solid hsla(355, 85%, 60%, 0.6);
+  color: hsl(355, 90%, 65%);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), 0 0 18px hsla(355, 85%, 58%, 0.35);
 }
 
 .swipe-btn--dislike:hover {
-  background-color: hsla(355, 85%, 60%, 0.15);
-  border-color: hsl(355, 85%, 60%);
+  background: radial-gradient(circle at 35% 35%, hsla(355, 85%, 55%, 0.35), var(--bg-tertiary) 80%);
+  border-color: hsl(355, 95%, 62%);
+  color: #fff;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.6), 0 0 26px hsla(355, 90%, 60%, 0.65);
   transform: scale(1.08);
 }
 
 .swipe-btn--info {
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   background-color: var(--bg-tertiary);
+  border: 1.5px solid hsla(38, 92%, 50%, 0.35);
   color: var(--accent);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
 .swipe-btn--info:hover {
   background-color: var(--accent-subtle);
   border-color: var(--accent);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 16px hsla(38, 92%, 50%, 0.4);
   transform: scale(1.08);
 }
 
 .swipe-btn--like {
-  width: 58px;
-  height: 58px;
-  background: linear-gradient(135deg, hsl(145, 75%, 42%), hsl(145, 75%, 36%));
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, hsl(145, 80%, 44%), hsl(145, 85%, 34%));
   color: #fff;
-  border: none;
-  box-shadow: 0 6px 20px hsla(145, 75%, 40%, 0.4);
+  border: 2px solid hsla(145, 85%, 55%, 0.7);
+  box-shadow: 0 6px 22px hsla(145, 75%, 40%, 0.5), 0 0 20px hsla(145, 80%, 48%, 0.45);
 }
 
 .swipe-btn--like:hover {
-  background: linear-gradient(135deg, hsl(145, 75%, 48%), hsl(145, 75%, 40%));
-  box-shadow: 0 8px 24px hsla(145, 75%, 40%, 0.6);
+  background: linear-gradient(135deg, hsl(145, 85%, 50%), hsl(145, 85%, 38%));
+  border-color: hsl(145, 95%, 60%);
+  box-shadow: 0 8px 30px hsla(145, 75%, 40%, 0.7), 0 0 28px hsla(145, 90%, 55%, 0.7);
   transform: scale(1.08);
 }
 
